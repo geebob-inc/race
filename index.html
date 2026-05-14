@@ -1048,6 +1048,65 @@ function animate(){
 
         syncPlayer();
 
+        // MOTORCYCLE COLLISIONS
+        aiPlayers.forEach(ai=>{
+
+            const dx = bike.position.x - ai.position.x;
+            const dz = bike.position.z - ai.position.z;
+
+            const distance = Math.sqrt(dx*dx + dz*dz);
+
+            if(distance < 4){
+
+                // Crash reaction
+                speed *= -0.5;
+                crashTimer = 25;
+
+                bike.rotation.z = 1.1;
+                ai.rotation.z = -1.1;
+
+                // Push bikes apart
+                bike.position.x += dx * 0.15;
+                bike.position.z += dz * 0.15;
+
+                ai.position.x -= dx * 0.08;
+                ai.position.z -= dz * 0.08;
+
+                // Crash sparks
+                for(let i=0;i<10;i++){
+
+                    const spark = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.15,5,5),
+                        new THREE.MeshBasicMaterial({
+                            color:0xffaa00
+                        })
+                    );
+
+                    spark.position.set(
+                        (bike.position.x + ai.position.x)/2,
+                        1 + Math.random()*2,
+                        (bike.position.z + ai.position.z)/2
+                    );
+
+                    scene.add(spark);
+
+                    const velX = (Math.random()-0.5)*0.8;
+                    const velZ = (Math.random()-0.5)*0.8;
+
+                    const sparkInterval = setInterval(()=>{
+                        spark.position.x += velX;
+                        spark.position.z += velZ;
+                        spark.position.y += 0.05;
+                    },16);
+
+                    setTimeout(()=>{
+                        clearInterval(sparkInterval);
+                        scene.remove(spark);
+                    },400);
+                }
+            }
+        });
+
         // AI MOVEMENT
         aiPlayers.forEach(ai=>{
 
