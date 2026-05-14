@@ -317,6 +317,23 @@ for(let i=0;i<28;i++){
 // BIKE
 const bike = new THREE.Group();
 
+// NEON TRAIL EFFECT
+const trailGeometry = new THREE.BufferGeometry();
+const trailMaterial = new THREE.LineBasicMaterial({
+    color:0x00e5ff
+});
+
+const trailPoints = [
+    new THREE.Vector3(0,0,0),
+    new THREE.Vector3(0,0,-2)
+];
+
+trailGeometry.setFromPoints(trailPoints);
+
+const neonTrail = new THREE.Line(trailGeometry, trailMaterial);
+neonTrail.position.set(0,-0.5,-3);
+bike.add(neonTrail);
+
 // Main body
 const body = new THREE.Mesh(
     new THREE.BoxGeometry(2,1,5),
@@ -450,6 +467,94 @@ const engine = new THREE.Mesh(
 engine.position.set(0,-0.1,0);
 engine.castShadow = true;
 bike.add(engine);
+
+// Front windshield
+const windshield = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2,0.6,0.1),
+    new THREE.MeshPhysicalMaterial({
+        color:0x88ccff,
+        transparent:true,
+        opacity:0.45,
+        roughness:0,
+        transmission:1,
+        metalness:0
+    })
+);
+
+windshield.position.set(0,0.8,2.3);
+windshield.rotation.x = -0.35;
+windshield.castShadow = true;
+bike.add(windshield);
+
+// Side panels
+for(let side=-1; side<=1; side+=2){
+
+    const panel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.15,0.9,2.8),
+        new THREE.MeshStandardMaterial({
+            color:0xaa0000,
+            metalness:1,
+            roughness:0.18,
+            emissive:0x220000,
+            emissiveIntensity:0.3
+        })
+    );
+
+    panel.position.set(side*0.95,0.05,0.1);
+    panel.castShadow = true;
+    bike.add(panel);
+}
+
+// Brake light
+const brakeLight = new THREE.PointLight(0xff0000,2,15);
+brakeLight.position.set(0,0.2,-3);
+bike.add(brakeLight);
+
+const brakeMesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5,0.2,0.2),
+    new THREE.MeshBasicMaterial({
+        color:0xff2222
+    })
+);
+
+brakeMesh.position.set(0,0.2,-2.6);
+bike.add(brakeMesh);
+
+// Front forks
+for(let side=-1; side<=1; side+=2){
+
+    const fork = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.07,0.07,2.3,10),
+        new THREE.MeshStandardMaterial({
+            color:0xcccccc,
+            metalness:1,
+            roughness:0.15
+        })
+    );
+
+    fork.position.set(side*0.45,-0.1,1.7);
+    fork.rotation.x = 0.15;
+    fork.castShadow = true;
+
+    bike.add(fork);
+}
+
+// Rear suspension
+const suspension = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08,0.08,1.4,10),
+    new THREE.MeshStandardMaterial({
+        color:0xffff00,
+        metalness:0.8,
+        roughness:0.25,
+        emissive:0x444400
+    })
+);
+
+suspension.rotation.x = 0.7;
+suspension.position.set(0,-0.1,-1.6);
+suspension.castShadow = true;
+
+bike.add(suspension);
 
 bike.position.y = 1;
 scene.add(bike);
@@ -963,7 +1068,11 @@ function animate(){
         bike.position.z += Math.cos(angle) * speed;
 
         frontWheel.rotation.x += speed;
+        frontWheel.rotation.y = Math.sin(Date.now()*0.002) * 0.08;
         rearWheel.rotation.x += speed;
+
+        // Dynamic bike lean
+        bike.rotation.x = -speed * 0.03;
 
         // CRASH DETECTION
         crashed = false;
