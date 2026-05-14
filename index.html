@@ -86,6 +86,10 @@ canvas{
 <!-- Uses classic non-module scripts instead of ES module imports -->
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+
 </head>
 <body>
 
@@ -144,6 +148,11 @@ canvas{
     <input id="usernameInput" type="text" maxlength="14" placeholder="Enter username"
     style="width:100%;padding:10px;border:none;border-radius:10px;background:#111;color:white;outline:none;margin-bottom:10px;">
 
+    <button id="gmailLoginBtn"
+    style="width:100%;padding:10px;border:none;border-radius:10px;background:#db4437;color:white;font-weight:bold;cursor:pointer;margin-bottom:10px;">
+    SIGN IN WITH GOOGLE
+    </button>
+
     <button id="saveProfileBtn"
     style="width:100%;padding:10px;border:none;border-radius:10px;background:#00bfff;color:white;font-weight:bold;cursor:pointer;">
     SAVE PROFILE
@@ -156,29 +165,58 @@ canvas{
     </div>
 </div>
 
-<div id="chatBox" style="position:absolute;right:15px;top:15px;width:340px;height:420px;min-width:260px;min-height:260px;resize:both;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.2);border-radius:18px;backdrop-filter:blur(10px);display:flex;flex-direction:column;z-index:100;color:white;overflow:hidden;">
 
-    <div id="chatResizeHandle" style="position:absolute;right:6px;bottom:6px;width:14px;height:14px;background:#00bfff;border-radius:4px;opacity:0.7;"></div>
-
-    <div style="padding:12px;font-size:20px;font-weight:bold;color:#00e5ff;border-bottom:1px solid rgba(255,255,255,0.15);">
-        LIVE CHAT
-    </div>
-
-    <div id="chatMessages" style="flex:1;padding:10px;overflow-y:auto;font-size:14px;"></div>
-
-    <div style="display:flex;padding:10px;gap:8px;background:rgba(255,255,255,0.04);">
-        <input id="chatInput" type="text" placeholder="Type message..."
-        style="flex:1;padding:10px;border:none;border-radius:10px;background:#111;color:white;outline:none;">
-
-        <button id="sendBtn"
-        style="padding:10px 14px;border:none;border-radius:10px;background:#00bfff;color:white;font-weight:bold;cursor:pointer;">
-        Send
-        </button>
-    </div>
-</div>
 
 <script>
 window.addEventListener('load',()=>{
+
+// FIREBASE GOOGLE LOGIN
+// Replace with your Firebase project config
+const firebaseConfig = {
+    apiKey: 'YOUR_API_KEY',
+    authDomain: 'YOUR_PROJECT.firebaseapp.com',
+    projectId: 'YOUR_PROJECT_ID',
+    appId: 'YOUR_APP_ID'
+};
+
+try{
+    firebase.initializeApp(firebaseConfig);
+}catch(e){
+    console.log('Firebase already initialized');
+}
+
+const provider = new firebase.auth.GoogleAuthProvider();
+
+async function signInWithGoogle(){
+
+    try{
+
+        const result = await firebase.auth().signInWithPopup(provider);
+
+        const user = result.user;
+
+        if(user){
+
+            username = user.displayName || 'Rider';
+
+            localStorage.setItem('moto_username', username);
+
+            updateProfile();
+
+            const gmailBtn = document.getElementById('gmailLoginBtn');
+
+            if(gmailBtn){
+                gmailBtn.innerText = 'SIGNED IN';
+            }
+
+            
+        }
+
+    }catch(err){
+        console.error(err);
+        alert('Google sign-in failed');
+    }
+}
 
 const loading = document.getElementById('loading');
 loading.style.display = 'none';
@@ -718,7 +756,14 @@ const startBtn = document.getElementById('startBtn');
 // CONTROLS
 const keys = {};
 
-window.addEventListener('keydown',e=>{
+window.addEventListener('keydown',(e)=>{
+
+    // Jump controls
+    if((e.code === 'Space' || e.key === ' ') && !isJumping){
+        verticalVelocity = 0.35;
+        isJumping = true;
+    }
+
     keys[e.key.toLowerCase()] = true;
 });
 
@@ -727,6 +772,9 @@ window.addEventListener('keyup',e=>{
 });
 
 let speed = 0;
+let verticalVelocity = 0;
+let isJumping = false;
+const gravity = 0.015;
 let crashed = false;
 let crashTimer = 0;
 let angle = 0;
@@ -814,6 +862,10 @@ function updateProfile(){
 
 updateProfile();
 
+document.getElementById('gmailLoginBtn').onclick = ()=>{
+    signInWithGoogle();
+};
+
 saveProfileBtn.onclick = ()=>{
 
     const newName = usernameInput.value.trim();
@@ -826,53 +878,18 @@ saveProfileBtn.onclick = ()=>{
 
     updateProfile();
 
-    addChatMessage('SYSTEM','Profile updated!',false);
+    
 };
 
-// LIVE CHAT
+// Chat removed
 const savedChat = JSON.parse(localStorage.getItem('moto_chat_history') || '[]');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
 const sendBtn = document.getElementById('sendBtn');
 
-function saveChatHistory(){
 
-    const history = [];
 
-    document.querySelectorAll('#chatMessages div').forEach(msg=>{
 
-        history.push({
-            html: msg.innerHTML,
-            background: msg.style.background
-        });
-    });
-
-    // Save last 120 chat messages
-    localStorage.setItem(
-        'moto_chat_history',
-        JSON.stringify(history.slice(-120))
-    );
-}
-
-function addChatMessage(name,message,isLocal=false){
-
-    const msg = document.createElement('div');
-
-    msg.style.marginBottom = '8px';
-    msg.style.padding = '8px';
-    msg.style.borderRadius = '10px';
-    msg.style.background = isLocal
-        ? 'rgba(0,191,255,0.25)'
-        : 'rgba(255,255,255,0.08)';
-
-    msg.innerHTML = `<b>${name}:</b> ${message}`;
-
-    chatMessages.appendChild(msg);
-
-    saveChatHistory();
-
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
 
 function sendChat(){
 
@@ -880,7 +897,7 @@ function sendChat(){
 
     if(!text) return;
 
-    addChatMessage(username,text,true);
+    
 
     channel.postMessage({
         type:'chat',
@@ -967,7 +984,7 @@ channel.onmessage = (event)=>{
     if(data.type === 'chat'){
 
         if(data.id !== localPlayerId){
-            addChatMessage(data.username || data.id,data.text,false);
+            
         }
 
         return;
@@ -1071,6 +1088,20 @@ function animate(){
         frontWheel.rotation.y = Math.sin(Date.now()*0.002) * 0.08;
         rearWheel.rotation.x += speed;
 
+        // JUMP PHYSICS
+        verticalVelocity -= gravity;
+        bike.position.y += verticalVelocity;
+
+        if(bike.position.y <= 1){
+            bike.position.y = 1;
+            verticalVelocity = 0;
+            isJumping = false;
+        }
+
+        if(isJumping){
+            bike.rotation.x = -0.2 - verticalVelocity * 0.4;
+        }
+
         // Dynamic bike lean
         bike.rotation.x = -speed * 0.03;
 
@@ -1124,6 +1155,7 @@ function animate(){
         }
         else{
             bike.rotation.z *= 0.9;
+            bike.rotation.x *= 0.92;
         }
 
         // DRIFT
