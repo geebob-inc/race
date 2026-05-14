@@ -176,6 +176,34 @@ ground.rotation.x = -Math.PI/2;
 ground.receiveShadow = true;
 scene.add(ground);
 
+// CRASH WALLS
+const crashWalls = [];
+
+function createWall(x,z,w,d){
+
+    const wall = new THREE.Mesh(
+        new THREE.BoxGeometry(w,6,d),
+        new THREE.MeshStandardMaterial({
+            color:0x444444,
+            metalness:0.7,
+            roughness:0.4,
+            emissive:0x111111
+        })
+    );
+
+    wall.position.set(x,3,z);
+    wall.castShadow = true;
+    wall.receiveShadow = true;
+
+    scene.add(wall);
+    crashWalls.push(wall);
+}
+
+createWall(0,125,260,6);
+createWall(0,-125,260,6);
+createWall(125,0,6,260);
+createWall(-125,0,6,260);
+
 // TRACK
 const track = new THREE.Mesh(
     new THREE.RingGeometry(80,120,48),
@@ -221,40 +249,139 @@ for(let i=0;i<28;i++){
 // BIKE
 const bike = new THREE.Group();
 
+// Main body
 const body = new THREE.Mesh(
     new THREE.BoxGeometry(2,1,5),
     new THREE.MeshStandardMaterial({
-        color:0xff3333,
-        metalness:0.7,
-        roughness:0.25
+        color:0xff2222,
+        metalness:1,
+        roughness:0.15,
+        emissive:0x220000,
+        emissiveIntensity:0.4
     })
 );
-
 body.castShadow = true;
 bike.add(body);
 
+// Front fairing
+const frontFairing = new THREE.Mesh(
+    new THREE.BoxGeometry(1.8,0.9,1.5),
+    new THREE.MeshStandardMaterial({
+        color:0xdd0000,
+        metalness:1,
+        roughness:0.12
+    })
+);
+frontFairing.position.set(0,0.2,1.8);
+frontFairing.castShadow = true;
+bike.add(frontFairing);
+
+// Seat
+const seat = new THREE.Mesh(
+    new THREE.BoxGeometry(1.3,0.4,1.6),
+    new THREE.MeshStandardMaterial({
+        color:0x111111,
+        roughness:0.9,
+        metalness:0.1
+    })
+);
+seat.position.set(0,0.55,-0.4);
+seat.castShadow = true;
+bike.add(seat);
+
+// Fuel tank
+const tank = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.65,0.8,1.6,16),
+    new THREE.MeshStandardMaterial({
+        color:0xff3333,
+        metalness:1,
+        roughness:0.18
+    })
+);
+tank.rotation.z = Math.PI/2;
+tank.position.set(0,0.45,0.3);
+tank.castShadow = true;
+bike.add(tank);
+
+// Handlebars
+const handleBar = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08,0.08,2.2,10),
+    new THREE.MeshStandardMaterial({
+        color:0xc0c0c0,
+        metalness:1,
+        roughness:0.2
+    })
+);
+handleBar.rotation.z = Math.PI/2;
+handleBar.position.set(0,0.7,2);
+handleBar.castShadow = true;
+bike.add(handleBar);
+
+// Exhaust pipe
+const exhaust = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12,0.18,2.5,12),
+    new THREE.MeshStandardMaterial({
+        color:0x999999,
+        metalness:1,
+        roughness:0.2,
+        emissive:0x222222
+    })
+);
+exhaust.rotation.x = Math.PI/2;
+exhaust.position.set(-0.8,-0.1,-0.7);
+exhaust.castShadow = true;
+bike.add(exhaust);
+
 function createWheel(){
-    const wheel = new THREE.Mesh(
-        new THREE.CylinderGeometry(1,1,0.8,12),
+    const wheelGroup = new THREE.Group();
+
+    const tire = new THREE.Mesh(
+        new THREE.CylinderGeometry(1,1,0.8,18),
         new THREE.MeshStandardMaterial({
-            color:0x111111,
-            roughness:0.8
+            color:0x090909,
+            roughness:1
         })
     );
 
-    wheel.rotation.z = Math.PI/2;
-    wheel.castShadow = true;
+    tire.rotation.z = Math.PI/2;
+    tire.castShadow = true;
+    wheelGroup.add(tire);
 
-    return wheel;
+    const rim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.65,0.65,0.82,16),
+        new THREE.MeshStandardMaterial({
+            color:0xc0c0c0,
+            metalness:1,
+            roughness:0.15
+        })
+    );
+
+    rim.rotation.z = Math.PI/2;
+    wheelGroup.add(rim);
+
+    return wheelGroup;
 }
 
 const frontWheel = createWheel();
-frontWheel.position.set(0,-0.7,2);
+frontWheel.position.set(0,-0.7,2.2);
 bike.add(frontWheel);
 
 const rearWheel = createWheel();
-rearWheel.position.set(0,-0.7,-2);
+rearWheel.position.set(0,-0.7,-2.2);
 bike.add(rearWheel);
+
+// Engine block
+const engine = new THREE.Mesh(
+    new THREE.BoxGeometry(1.2,0.9,1.3),
+    new THREE.MeshStandardMaterial({
+        color:0x555555,
+        metalness:1,
+        roughness:0.25
+    })
+);
+engine.position.set(0,-0.1,0);
+engine.castShadow = true;
+bike.add(engine);
 
 bike.position.y = 1;
 scene.add(bike);
@@ -374,6 +501,8 @@ window.addEventListener('keyup',e=>{
 });
 
 let speed = 0;
+let crashed = false;
+let crashTimer = 0;
 let angle = 0;
 let started = false;
 let lap = 1;
@@ -484,6 +613,58 @@ function animate(){
 
         frontWheel.rotation.x += speed;
         rearWheel.rotation.x += speed;
+
+        // CRASH DETECTION
+        crashed = false;
+
+        crashWalls.forEach(wall=>{
+
+            const dx = bike.position.x - wall.position.x;
+            const dz = bike.position.z - wall.position.z;
+
+            const hitX = Math.abs(dx) < (wall.geometry.parameters.width/2 + 2);
+            const hitZ = Math.abs(dz) < (wall.geometry.parameters.depth/2 + 2);
+
+            if(hitX && hitZ){
+
+                crashed = true;
+                crashTimer = 20;
+
+                speed *= -0.4;
+
+                bike.rotation.z = 1.2;
+
+                // Crash sparks
+                for(let i=0;i<6;i++){
+
+                    const spark = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.2,6,6),
+                        new THREE.MeshBasicMaterial({
+                            color:0xffaa00
+                        })
+                    );
+
+                    spark.position.copy(bike.position);
+
+                    spark.position.x += (Math.random()-0.5)*2;
+                    spark.position.y += Math.random()*2;
+                    spark.position.z += (Math.random()-0.5)*2;
+
+                    scene.add(spark);
+
+                    setTimeout(()=>{
+                        scene.remove(spark);
+                    },300);
+                }
+            }
+        });
+
+        if(crashTimer > 0){
+            crashTimer--;
+        }
+        else{
+            bike.rotation.z *= 0.9;
+        }
 
         // DRIFT
         if(keys[' ']){
