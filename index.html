@@ -1,14 +1,14 @@
-# Advanced Browser FPS Game (Three.js Graphics)
+# First-Person Shooter Game (HTML + Three.js)
 
-Save this as `advanced-fps.html` and open it in a modern browser.
+Save this as `index.html` and open it in a browser.
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Advanced FPS</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Cyber FPS</title>
 <style>
 body {
     margin: 0;
@@ -17,25 +17,25 @@ body {
     font-family: Arial, sans-serif;
 }
 
-#ui {
+#hud {
     position: absolute;
-    top: 10px;
-    left: 10px;
+    top: 15px;
+    left: 15px;
     color: white;
     z-index: 10;
     font-size: 22px;
-    text-shadow: 0 0 8px black;
+    text-shadow: 0 0 10px cyan;
 }
 
 #crosshair {
     position: absolute;
-    left: 50%;
     top: 50%;
+    left: 50%;
     width: 20px;
     height: 20px;
     margin-left: -10px;
     margin-top: -10px;
-    z-index: 10;
+    z-index: 20;
 }
 
 #crosshair::before,
@@ -47,62 +47,61 @@ body {
 
 #crosshair::before {
     left: 9px;
-    top: 0;
     width: 2px;
     height: 20px;
 }
 
 #crosshair::after {
     top: 9px;
-    left: 0;
     width: 20px;
     height: 2px;
 }
 
-#menu {
+#startScreen {
     position: absolute;
     inset: 0;
-    background: rgba(0,0,0,0.85);
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    flex-direction: column;
     color: white;
-    z-index: 20;
+    background: rgba(0,0,0,0.9);
+    z-index: 30;
 }
 
 button {
     padding: 15px 30px;
     font-size: 22px;
     border: none;
-    border-radius: 12px;
     background: cyan;
+    color: black;
     cursor: pointer;
+    border-radius: 10px;
+    font-weight: bold;
 }
 </style>
 </head>
 <body>
 
-<div id="ui">
+<div id="hud">
 Health: <span id="health">100</span><br>
-Score: <span id="score">0</span><br>
-Weapon: <span id="weapon">Rifle</span>
+Score: <span id="score">0</span>
 </div>
 
 <div id="crosshair"></div>
 
-<div id="menu">
-<h1>Advanced FPS</h1>
-<p>WASD = Move | Mouse = Aim | Click = Shoot</p>
-<p>1 = Rifle | 2 = Shotgun | 3 = Laser</p>
-<button id="startBtn">Start Game</button>
+<div id="startScreen">
+    <h1>CYBER FPS</h1>
+    <p>WASD = Move | Mouse = Look | Click = Shoot</p>
+    <button id="startBtn">START GAME</button>
 </div>
 
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160/build/three.module.js';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165/build/three.module.js';
+import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.165/examples/jsm/controls/PointerLockControls.js';
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.Fog(0x000000, 10, 120);
+scene.fog = new THREE.Fog(0x000000, 20, 120);
 
 const camera = new THREE.PerspectiveCamera(
     75,
@@ -114,18 +113,33 @@ const camera = new THREE.PerspectiveCamera(
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 document.body.appendChild(renderer.domElement);
 
-const light = new THREE.DirectionalLight(0xffffff, 2);
-light.position.set(20, 40, 20);
-light.castShadow = true;
-scene.add(light);
+const controls = new PointerLockControls(camera, document.body);
+scene.add(controls.getObject());
 
-scene.add(new THREE.AmbientLight(0x666666));
+const ambient = new THREE.AmbientLight(0x404040, 2);
+scene.add(ambient);
+
+const dirLight = new THREE.DirectionalLight(0xffffff, 2);
+dirLight.position.set(20, 30, 10);
+dirLight.castShadow = true;
+scene.add(dirLight);
+
+const neon1 = new THREE.PointLight(0x00ffff, 30, 50);
+neon1.position.set(0, 8, 0);
+scene.add(neon1);
+
+const neon2 = new THREE.PointLight(0xff00ff, 30, 50);
+neon2.position.set(30, 8, 30);
+scene.add(neon2);
 
 const floorGeo = new THREE.PlaneGeometry(300, 300);
 const floorMat = new THREE.MeshStandardMaterial({
-    color: 0x222222
+    color: 0x111111,
+    metalness: 0.8,
+    roughness: 0.2
 });
 
 const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -133,194 +147,211 @@ floor.rotation.x = -Math.PI / 2;
 floor.receiveShadow = true;
 scene.add(floor);
 
-const walls = [];
+function createWall(x, z, w, h, d, color = 0x222244) {
+    const geo = new THREE.BoxGeometry(w, h, d);
+    const mat = new THREE.MeshStandardMaterial({
+        color,
+        metalness: 0.5,
+        roughness: 0.3
+    });
 
-function createWall(x, y, z, w, h, d, color=0x4444ff) {
-    const wall = new THREE.Mesh(
-        new THREE.BoxGeometry(w,h,d),
-        new THREE.MeshStandardMaterial({ color })
-    );
-
-    wall.position.set(x,y,z);
+    const wall = new THREE.Mesh(geo, mat);
+    wall.position.set(x, h / 2, z);
     wall.castShadow = true;
     wall.receiveShadow = true;
     scene.add(wall);
-    walls.push(wall);
 }
 
-createWall(0,5,-50,100,10,4);
-createWall(-50,5,0,4,10,100);
-createWall(50,5,0,4,10,100);
-createWall(0,5,50,100,10,4);
-createWall(0,5,0,20,10,20,0xff0000);
-createWall(-25,5,-20,15,10,15,0x00ff00);
-createWall(25,5,20,15,10,15,0xffff00);
+for (let i = -50; i <= 50; i += 10) {
+    createWall(i, -50, 8, 10, 4);
+    createWall(i, 50, 8, 10, 4);
+    createWall(-50, i, 4, 10, 8);
+    createWall(50, i, 4, 10, 8);
+}
 
-camera.position.y = 2;
+for (let i = 0; i < 30; i++) {
+    createWall(
+        (Math.random() - 0.5) * 80,
+        (Math.random() - 0.5) * 80,
+        5 + Math.random() * 10,
+        5 + Math.random() * 12,
+        5 + Math.random() * 10,
+        Math.random() > 0.5 ? 0x00ffff : 0xff00ff
+    );
+}
+
+camera.position.set(0, 2, 10);
 
 const keys = {};
-let yaw = 0;
-
-const bullets = [];
-const enemies = [];
-
-let health = 100;
-let score = 0;
-
-const weaponUI = document.getElementById('weapon');
-const healthUI = document.getElementById('health');
-const scoreUI = document.getElementById('score');
-
-const weapons = [
-    { name: 'Rifle', damage: 35, cooldown: 150, color: 0xffff00 },
-    { name: 'Shotgun', damage: 90, cooldown: 700, color: 0xff8800 },
-    { name: 'Laser', damage: 18, cooldown: 70, color: 0x00ffff }
-];
-
-let currentWeapon = 0;
-let lastShot = 0;
-
-function spawnEnemy() {
-    const enemy = new THREE.Mesh(
-        new THREE.BoxGeometry(3,6,3),
-        new THREE.MeshStandardMaterial({ color: 0xff0000 })
-    );
-
-    enemy.position.set(
-        (Math.random() - 0.5) * 80,
-        3,
-        (Math.random() - 0.5) * 80
-    );
-
-    enemy.health = 100;
-    enemy.castShadow = true;
-
-    scene.add(enemy);
-    enemies.push(enemy);
-}
-
-for(let i=0;i<10;i++) spawnEnemy();
 
 window.addEventListener('keydown', e => {
     keys[e.key.toLowerCase()] = true;
-
-    if(e.key === '1') currentWeapon = 0;
-    if(e.key === '2') currentWeapon = 1;
-    if(e.key === '3') currentWeapon = 2;
-
-    weaponUI.textContent = weapons[currentWeapon].name;
 });
 
 window.addEventListener('keyup', e => {
     keys[e.key.toLowerCase()] = false;
 });
 
-window.addEventListener('mousemove', e => {
-    if(document.pointerLockElement === renderer.domElement) {
-        yaw -= e.movementX * 0.002;
-    }
-});
+const bullets = [];
+const enemies = [];
 
-window.addEventListener('mousedown', () => {
-    const now = Date.now();
-    const weapon = weapons[currentWeapon];
+const bulletGeo = new THREE.SphereGeometry(0.1, 8, 8);
+const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffff00 });
 
-    if(now - lastShot < weapon.cooldown) return;
-    lastShot = now;
-
-    const bullet = new THREE.Mesh(
-        new THREE.SphereGeometry(0.2),
-        new THREE.MeshBasicMaterial({ color: weapon.color })
-    );
+function shoot() {
+    const bullet = new THREE.Mesh(bulletGeo, bulletMat);
 
     bullet.position.copy(camera.position);
-    bullet.velocity = new THREE.Vector3(
-        Math.sin(yaw),
-        0,
-        Math.cos(yaw) * -1
-    ).multiplyScalar(2);
 
-    bullet.damage = weapon.damage;
+    const direction = new THREE.Vector3();
+    camera.getWorldDirection(direction);
+
+    bullet.velocity = direction.multiplyScalar(1.8);
 
     scene.add(bullet);
     bullets.push(bullet);
+}
+
+window.addEventListener('click', () => {
+    if (controls.isLocked) shoot();
 });
 
-function movePlayer() {
-    const speed = 0.25;
+function createEnemy() {
+    const geo = new THREE.BoxGeometry(2, 3, 2);
+    const mat = new THREE.MeshStandardMaterial({
+        color: 0xff2222,
+        emissive: 0xaa0000,
+        metalness: 0.3,
+        roughness: 0.5
+    });
 
-    const forward = new THREE.Vector3(
-        Math.sin(yaw),
-        0,
-        -Math.cos(yaw)
+    const enemy = new THREE.Mesh(geo, mat);
+
+    enemy.position.set(
+        (Math.random() - 0.5) * 80,
+        1.5,
+        (Math.random() - 0.5) * 80
     );
 
-    const right = new THREE.Vector3(
-        Math.cos(yaw),
-        0,
-        Math.sin(yaw)
-    );
+    enemy.castShadow = true;
+    enemy.health = 3;
 
-    if(keys['w']) camera.position.add(forward.clone().multiplyScalar(speed));
-    if(keys['s']) camera.position.add(forward.clone().multiplyScalar(-speed));
-    if(keys['a']) camera.position.add(right.clone().multiplyScalar(-speed));
-    if(keys['d']) camera.position.add(right.clone().multiplyScalar(speed));
+    scene.add(enemy);
+    enemies.push(enemy);
+}
 
-    camera.rotation.y = yaw;
+for (let i = 0; i < 15; i++) {
+    createEnemy();
+}
+
+let health = 100;
+let score = 0;
+
+const healthUI = document.getElementById('health');
+const scoreUI = document.getElementById('score');
+
+function updateMovement() {
+    const speed = 0.15;
+
+    if (keys['w']) controls.moveForward(speed);
+    if (keys['s']) controls.moveForward(-speed);
+    if (keys['a']) controls.moveRight(-speed);
+    if (keys['d']) controls.moveRight(speed);
 }
 
 function updateBullets() {
-    bullets.forEach((bullet, i) => {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const bullet = bullets[i];
         bullet.position.add(bullet.velocity);
 
-        enemies.forEach((enemy, j) => {
-            if(enemy.position.distanceTo(bullet.position) < 3) {
-                enemy.health -= bullet.damage;
+        if (bullet.position.length() > 300) {
+            scene.remove(bullet);
+            bullets.splice(i, 1);
+            continue;
+        }
+
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            const enemy = enemies[j];
+
+            if (bullet.position.distanceTo(enemy.position) < 1.5) {
+                enemy.health--;
 
                 scene.remove(bullet);
-                bullets.splice(i,1);
+                bullets.splice(i, 1);
 
-                if(enemy.health <= 0) {
+                if (enemy.health <= 0) {
                     scene.remove(enemy);
-                    enemies.splice(j,1);
+                    enemies.splice(j, 1);
                     score += 10;
                     scoreUI.textContent = score;
-                    spawnEnemy();
+                    createEnemy();
                 }
+
+                break;
             }
-        });
-    });
+        }
+    }
 }
 
 function updateEnemies() {
     enemies.forEach(enemy => {
-        const dir = camera.position.clone().sub(enemy.position);
-        dir.y = 0;
-        dir.normalize();
+        const dir = new THREE.Vector3();
+        dir.subVectors(camera.position, enemy.position).normalize();
 
-        enemy.position.add(dir.multiplyScalar(0.05));
+        enemy.position.x += dir.x * 0.03;
+        enemy.position.z += dir.z * 0.03;
 
-        if(enemy.position.distanceTo(camera.position) < 3) {
+        enemy.lookAt(camera.position.x, enemy.position.y, camera.position.z);
+
+        if (enemy.position.distanceTo(camera.position) < 2) {
             health -= 0.1;
             healthUI.textContent = Math.floor(health);
 
-            if(health <= 0) {
-                alert('Game Over! Score: ' + score);
+            if (health <= 0) {
+                alert('Game Over! Final Score: ' + score);
                 location.reload();
             }
         }
     });
 }
 
+const starsGeo = new THREE.BufferGeometry();
+const starVertices = [];
+
+for (let i = 0; i < 4000; i++) {
+    starVertices.push((Math.random() - 0.5) * 1000);
+    starVertices.push(Math.random() * 500);
+    starVertices.push((Math.random() - 0.5) * 1000);
+}
+
+starsGeo.setAttribute(
+    'position',
+    new THREE.Float32BufferAttribute(starVertices, 3)
+);
+
+const starsMat = new THREE.PointsMaterial({
+    color: 0xffffff,
+    size: 0.7
+});
+
+const stars = new THREE.Points(starsGeo, starsMat);
+scene.add(stars);
+
+const clock = new THREE.Clock();
+
 function animate() {
     requestAnimationFrame(animate);
 
-    movePlayer();
+    const delta = clock.getDelta();
+
+    updateMovement(delta);
     updateBullets();
     updateEnemies();
 
     renderer.render(scene, camera);
 }
+
+animate();
 
 window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
@@ -329,13 +360,19 @@ window.addEventListener('resize', () => {
 });
 
 const startBtn = document.getElementById('startBtn');
-const menu = document.getElementById('menu');
+const startScreen = document.getElementById('startScreen');
 
-startBtn.onclick = () => {
-    menu.style.display = 'none';
-    renderer.domElement.requestPointerLock();
-    animate();
-};
+startBtn.addEventListener('click', () => {
+    controls.lock();
+});
+
+controls.addEventListener('lock', () => {
+    startScreen.style.display = 'none';
+});
+
+controls.addEventListener('unlock', () => {
+    startScreen.style.display = 'flex';
+});
 </script>
 
 </body>
@@ -344,19 +381,25 @@ startBtn.onclick = () => {
 
 ## Features
 
-* First-person movement
+* First-person controls
 * Mouse aiming
 * Shooting system
 * Enemy AI
-* Health and score
-* Infinite enemy spawning
-* Retro-style 3D effect
+* Neon cyber graphics
+* Dynamic lighting
+* Fog effects
+* Score system
+* Health system
+* Procedural arena
+* Star-filled sky
+* Pointer lock controls
 
-## Ideas to Upgrade
+## Upload to GitHub Pages
 
-* Add real wall collision
-* Add sound effects
-* Add multiple weapons
-* Add textures
-* Add multiplayer
-* Add boss fights
+1. Create a GitHub repository
+2. Upload `index.html`
+3. Go to repository settings
+4. Open “Pages”
+5. Select branch: `main`
+6. Save
+7. Your FPS game will be live online
