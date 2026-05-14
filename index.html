@@ -1,15 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Kingdom Siege - Medieval First Person Combat</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kingdom Siege Remastered</title>
 <style>
-html,body{
+*{
     margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+html,body{
     overflow:hidden;
-    background:black;
-    font-family:Arial,sans-serif;
+    background:#050505;
+    font-family:Arial, sans-serif;
 }
 
 canvas{
@@ -18,37 +23,42 @@ canvas{
 
 #hud{
     position:absolute;
-    top:0;
-    left:0;
-    width:100%;
-    padding:20px;
+    top:20px;
+    left:20px;
     color:white;
-    pointer-events:none;
+    z-index:10;
+    text-shadow:0 0 10px black;
 }
 
-#healthBox{
+#title{
+    font-size:34px;
+    font-weight:bold;
+    margin-bottom:12px;
+}
+
+#healthContainer{
     width:320px;
-    height:28px;
+    height:30px;
+    background:#300;
     border:3px solid #111;
-    background:#4d0000;
-    border-radius:10px;
+    border-radius:12px;
     overflow:hidden;
     box-shadow:0 0 20px black;
 }
 
-#health{
+#healthBar{
     width:100%;
     height:100%;
-    background:linear-gradient(to right,#00ff6a,#0a7f33);
+    background:linear-gradient(to right,#00ff66,#0b7a34);
 }
 
 #crosshair{
     position:absolute;
-    top:50%;
     left:50%;
+    top:50%;
+    width:24px;
+    height:24px;
     transform:translate(-50%,-50%);
-    width:20px;
-    height:20px;
     pointer-events:none;
 }
 
@@ -61,452 +71,591 @@ canvas{
 
 #crosshair::before{
     width:2px;
-    height:20px;
-    left:9px;
+    height:24px;
+    left:11px;
 }
 
 #crosshair::after{
-    width:20px;
+    width:24px;
     height:2px;
-    top:9px;
-}
-
-#message{
-    position:absolute;
-    top:50%;
-    left:50%;
-    transform:translate(-50%,-50%);
-    color:white;
-    font-size:70px;
-    text-shadow:0 0 20px black;
-    display:none;
+    top:11px;
 }
 
 #controls{
     position:absolute;
-    bottom:20px;
+    bottom:18px;
     left:50%;
     transform:translateX(-50%);
-    background:rgba(0,0,0,0.55);
     color:white;
-    padding:12px 20px;
-    border-radius:15px;
-    font-size:15px;
+    background:rgba(0,0,0,0.5);
+    padding:12px 22px;
+    border-radius:14px;
+    font-size:14px;
+    text-align:center;
+}
+
+#message{
+    position:absolute;
+    inset:0;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+    color:white;
+    background:rgba(0,0,0,0.65);
+    font-size:70px;
+    text-shadow:0 0 25px black;
+}
+
+#message span{
+    font-size:26px;
+    margin-top:16px;
 }
 </style>
 </head>
 <body>
 
 <div id="hud">
-    <h2>⚔ Kingdom Siege</h2>
-    <div id="healthBox">
-        <div id="health"></div>
+    <div id="title">⚔ Kingdom Siege Remastered</div>
+    <div id="healthContainer">
+        <div id="healthBar"></div>
     </div>
 </div>
 
 <div id="crosshair"></div>
-<div id="message"></div>
 
 <div id="controls">
-WASD = Move | Mouse = Look | Click = Sword Attack<br>
-Survive the siege and defend the kingdom.
+WASD = Move • Mouse = Look • Click = Attack • 1 = Sword • 2 = Bow
 </div>
+
+<div id="message"></div>
 
 <canvas id="game"></canvas>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = true;
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+function resize(){
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+}
+resize();
+addEventListener('resize', resize);
 
-const healthBar = document.getElementById('health');
+const healthBar = document.getElementById('healthBar');
 const message = document.getElementById('message');
 
 const world = {
-    width: 3200,
-    height: 3200
+    size: 5000
+};
+
+const player = {
+    x: 2500,
+    y: 2500,
+    angle: 0,
+    health: 100,
+    speed: 5
 };
 
 const keys = {};
 const enemies = [];
+const particles = [];
+let swordSwing = 0;
+let currentWeapon = 'sword';
+const arrows = [];
 
-let mouseX = 0;
-let attackAnim = 0;
+// Simple multiplayer across browser tabs/windows
+const playerId = Math.random().toString(36).substring(2,9);
+const channel = new BroadcastChannel('kingdom_siege_multiplayer');
+const remotePlayers = {};
 
-const player = {
-    x: 1300,
-    y: 1300,
-    angle: 0,
-    speed: 0,
-    health: 100
+setInterval(()=>{
+    channel.postMessage({
+        type:'player',
+        id:playerId,
+        x:player.x,
+        y:player.y,
+        angle:player.angle,
+        health:player.health,
+        weapon:currentWeapon
+    });
+},40);
+
+channel.onmessage = (e)=>{
+    const data = e.data;
+
+    if(data.id === playerId) return;
+
+    if(data.type === 'player'){
+        remotePlayers[data.id] = data;
+    }
 };
 
-for(let i=0;i<18;i++){
+for(let i=0;i<24;i++){
     enemies.push({
-        x: Math.random()*world.width,
-        y: Math.random()*world.height,
+        x: Math.random()*world.size,
+        y: Math.random()*world.size,
+        health: 100,
         alive: true,
-        attackTimer: 0
+        attackCooldown: 0
     });
 }
 
-function resize(){
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-}
-window.addEventListener('resize',resize);
+addEventListener('keydown', e=> keys[e.key.toLowerCase()] = true);
+addEventListener('keyup', e=> keys[e.key.toLowerCase()] = false);
 
-window.addEventListener('keydown',e=>{
-    keys[e.key.toLowerCase()] = true;
+addEventListener('mousemove', e=>{
+    if(document.pointerLockElement === canvas){
+        player.angle += e.movementX * 0.0025;
+    }
 });
 
-window.addEventListener('keyup',e=>{
-    keys[e.key.toLowerCase()] = false;
+canvas.addEventListener('click', ()=>{
+    canvas.requestPointerLock();
 });
 
-canvas.addEventListener('click',()=>{
-    attackAnim = 12;
+addEventListener('click', ()=>{
+    if(currentWeapon === 'sword'){
+        swordSwing = 1;
 
-    enemies.forEach(enemy=>{
-        if(!enemy.alive) return;
+        enemies.forEach(enemy=>{
+            if(!enemy.alive) return;
 
-        const dx = enemy.x-player.x;
-        const dy = enemy.y-player.y;
-        const dist = Math.sqrt(dx*dx+dy*dy);
+            const dx = enemy.x - player.x;
+            const dy = enemy.y - player.y;
 
-        const angleToEnemy = Math.atan2(dy,dx);
-        let diff = angleToEnemy - player.angle;
+            const dist = Math.hypot(dx,dy);
+            const angle = Math.atan2(dy,dx) - player.angle;
 
-        while(diff > Math.PI) diff -= Math.PI*2;
-        while(diff < -Math.PI) diff += Math.PI*2;
+            if(Math.abs(angle) < 0.4 && dist < 180){
+                enemy.health -= 50;
 
-        if(Math.abs(diff) < 0.35 && dist < 180){
-            enemy.alive = false;
-        }
-    });
+                for(let i=0;i<12;i++){
+                    particles.push({
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx:(Math.random()-0.5)*8,
+                        vy:(Math.random()-0.5)*8,
+                        life:40
+                    });
+                }
+
+                if(enemy.health <= 0){
+                    enemy.alive = false;
+                }
+            }
+        });
+    } else {
+        arrows.push({
+            x: player.x,
+            y: player.y,
+            angle: player.angle,
+            speed: 18,
+            life: 120
+        });
+    }
 });
 
-window.addEventListener('mousemove',e=>{
-    mouseX = e.movementX;
-    player.angle += mouseX*0.0025;
+addEventListener('keydown', e=>{
+    if(e.key === '1') currentWeapon = 'sword';
+    if(e.key === '2') currentWeapon = 'bow';
 });
 
 function movePlayer(){
-    const moveSpeed = 5;
-
     let mx = 0;
     let my = 0;
 
     if(keys['w']){
-        mx += Math.cos(player.angle)*moveSpeed;
-        my += Math.sin(player.angle)*moveSpeed;
+        mx += Math.cos(player.angle) * player.speed;
+        my += Math.sin(player.angle) * player.speed;
     }
 
     if(keys['s']){
-        mx -= Math.cos(player.angle)*moveSpeed;
-        my -= Math.sin(player.angle)*moveSpeed;
+        mx -= Math.cos(player.angle) * player.speed;
+        my -= Math.sin(player.angle) * player.speed;
     }
 
     if(keys['a']){
-        mx += Math.cos(player.angle-Math.PI/2)*moveSpeed;
-        my += Math.sin(player.angle-Math.PI/2)*moveSpeed;
+        mx += Math.cos(player.angle - Math.PI/2) * player.speed;
+        my += Math.sin(player.angle - Math.PI/2) * player.speed;
     }
 
     if(keys['d']){
-        mx += Math.cos(player.angle+Math.PI/2)*moveSpeed;
-        my += Math.sin(player.angle+Math.PI/2)*moveSpeed;
+        mx += Math.cos(player.angle + Math.PI/2) * player.speed;
+        my += Math.sin(player.angle + Math.PI/2) * player.speed;
     }
 
     player.x += mx;
     player.y += my;
 
-    player.x = Math.max(0,Math.min(world.width,player.x));
-    player.y = Math.max(0,Math.min(world.height,player.y));
+    // World boundaries
+    player.x = Math.max(0, Math.min(world.size, player.x));
+    player.y = Math.max(0, Math.min(world.size, player.y));
+}
+
+function drawStars(){
+    for(let i=0;i<80;i++){
+        const x = (i*137)%canvas.width;
+        const y = (i*83)%250;
+
+        ctx.fillStyle = 'rgba(255,255,255,0.5)';
+        ctx.fillRect(x,y,2,2);
+    }
 }
 
 function drawSky(){
     const sky = ctx.createLinearGradient(0,0,0,canvas.height/2);
-    sky.addColorStop(0,'#1f1a17');
-    sky.addColorStop(0.4,'#5c4630');
-    sky.addColorStop(1,'#9b7b58');
+    sky.addColorStop(0,'#14111b');
+    sky.addColorStop(0.5,'#6b4127');
+    sky.addColorStop(1,'#c48754');
 
     ctx.fillStyle = sky;
     ctx.fillRect(0,0,canvas.width,canvas.height/2);
 
-    const glow = ctx.createRadialGradient(canvas.width*0.75,120,10,canvas.width*0.75,120,180);
-    glow.addColorStop(0,'rgba(255,210,120,0.8)');
-    glow.addColorStop(1,'rgba(255,210,120,0)');
+    const sun = ctx.createRadialGradient(canvas.width*0.7,120,20,canvas.width*0.7,120,220);
+    sun.addColorStop(0,'rgba(255,220,150,0.9)');
+    sun.addColorStop(1,'rgba(255,220,150,0)');
 
-    ctx.fillStyle = glow;
+    ctx.fillStyle = sun;
     ctx.fillRect(0,0,canvas.width,canvas.height/2);
 }
 
 function drawGround(){
-    const dirt = ctx.createLinearGradient(0,canvas.height/2,0,canvas.height);
-    dirt.addColorStop(0,'#5e4b32');
-    dirt.addColorStop(1,'#24170d');
+    const ground = ctx.createLinearGradient(0,canvas.height/2,0,canvas.height);
+    ground.addColorStop(0,'#5f4b37');
+    ground.addColorStop(1,'#1a120b');
 
-    ctx.fillStyle = dirt;
+    ctx.fillStyle = ground;
     ctx.fillRect(0,canvas.height/2,canvas.width,canvas.height/2);
 
-    ctx.fillStyle = '#6f5a3f';
+    ctx.fillStyle = '#776149';
     ctx.beginPath();
-    ctx.moveTo(canvas.width*0.4,canvas.height);
-    ctx.lineTo(canvas.width*0.48,canvas.height/2+20);
-    ctx.lineTo(canvas.width*0.52,canvas.height/2+20);
-    ctx.lineTo(canvas.width*0.6,canvas.height);
+    ctx.moveTo(canvas.width*0.38,canvas.height);
+    ctx.lineTo(canvas.width*0.47,canvas.height/2+10);
+    ctx.lineTo(canvas.width*0.53,canvas.height/2+10);
+    ctx.lineTo(canvas.width*0.62,canvas.height);
     ctx.fill();
+}
+
+function project(wx,wy){
+    const dx = wx - player.x;
+    const dy = wy - player.y;
+
+    let angle = Math.atan2(dy,dx) - player.angle;
+
+    while(angle < -Math.PI) angle += Math.PI*2;
+    while(angle > Math.PI) angle -= Math.PI*2;
+
+    const dist = Math.hypot(dx,dy);
+
+    if(Math.abs(angle) > 1.2) return null;
+
+    return {
+        x: canvas.width/2 + Math.tan(angle)*700,
+        size: Math.max(20,12000/(dist+1)),
+        dist
+    };
 }
 
 function drawCastle(){
-    ctx.save();
-    ctx.translate(canvas.width/2,canvas.height/2);
+    const p = project(2400,1200);
+    if(!p) return;
 
-    const dx = 1500-player.x;
-    const dy = 900-player.y;
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(p.x-p.size/2+30,110,p.size,p.size*0.8);
 
-    const angle = Math.atan2(dy,dx)-player.angle;
-    const dist = Math.sqrt(dx*dx+dy*dy);
+    const wall = ctx.createLinearGradient(0,100,0,600);
+    wall.addColorStop(0,'#8d857d');
+    wall.addColorStop(1,'#5f5953');
 
-    const screenX = Math.tan(angle)*500;
-    const size = Math.max(50,12000/dist);
+    ctx.fillStyle = wall;
+    ctx.fillRect(p.x-p.size/2,90,p.size,p.size*0.8);
 
-    // Main wall
-    ctx.fillStyle = '#726960';
-    ctx.fillRect(screenX-size/2,90,size,size*0.8);
+    ctx.fillStyle = '#5b5550';
+    ctx.fillRect(p.x-p.size/2-60,40,p.size*0.2,p.size);
+    ctx.fillRect(p.x+p.size/2+20,40,p.size*0.2,p.size);
 
-    // Towers
-    ctx.fillStyle = '#5a534d';
-    ctx.fillRect(screenX-size/2-60,40,size*0.22,size*1.1);
-    ctx.fillRect(screenX+size/2+15,40,size*0.22,size*1.1);
+    ctx.fillStyle = '#2a1a12';
+    ctx.fillRect(p.x-p.size*0.12,220,p.size*0.24,p.size*0.45);
 
-    // Battlements
-    ctx.fillStyle = '#4e4843';
-    for(let i=0;i<8;i++){
-        ctx.fillRect(screenX-size/2+i*(size/8),70,24,24);
+    ctx.fillStyle = '#7d0000';
+    ctx.fillRect(p.x-p.size/2-20,70,14,120);
+    ctx.fillRect(p.x+p.size/2+40,70,14,120);
+}
+
+function drawTrees(){
+    for(let i=-8;i<9;i++){
+        const p = project(player.x + i*320, player.y + 650);
+        if(!p) continue;
+
+        ctx.fillStyle = '#3a2414';
+        ctx.fillRect(p.x-p.size*0.08,canvas.height/2+60,p.size*0.16,p.size*0.8);
+
+        ctx.fillStyle = '#173717';
+        ctx.beginPath();
+        ctx.arc(p.x,canvas.height/2,p.size*0.4,0,Math.PI*2);
+        ctx.fill();
     }
+}
 
-    // Gate
-    ctx.fillStyle = '#2a1b12';
-    ctx.fillRect(screenX-size*0.12,220,size*0.24,size*0.45);
+function drawRemotePlayers(){
+    Object.values(remotePlayers).forEach(other=>{
+        const p = project(other.x, other.y);
+        if(!p) return;
 
-    // Torches
-    ctx.fillStyle = '#ffbb55';
-    ctx.beginPath();
-    ctx.arc(screenX-size*0.17,260,8,0,Math.PI*2);
-    ctx.arc(screenX+size*0.17,260,8,0,Math.PI*2);
-    ctx.fill();
+        const y = canvas.height/2 + 120 - p.size;
 
-    // Fire glow
-    const leftGlow = ctx.createRadialGradient(screenX-size*0.17,260,5,screenX-size*0.17,260,40);
-    leftGlow.addColorStop(0,'rgba(255,180,60,0.8)');
-    leftGlow.addColorStop(1,'rgba(255,180,60,0)');
-    ctx.fillStyle = leftGlow;
-    ctx.beginPath();
-    ctx.arc(screenX-size*0.17,260,40,0,Math.PI*2);
-    ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.3)';
+        ctx.beginPath();
+        ctx.ellipse(p.x,y+p.size,p.size*0.4,p.size*0.18,0,0,Math.PI*2);
+        ctx.fill();
 
-    const rightGlow = ctx.createRadialGradient(screenX+size*0.17,260,5,screenX+size*0.17,260,40);
-    rightGlow.addColorStop(0,'rgba(255,180,60,0.8)');
-    rightGlow.addColorStop(1,'rgba(255,180,60,0)');
-    ctx.fillStyle = rightGlow;
-    ctx.beginPath();
-    ctx.arc(screenX+size*0.17,260,40,0,Math.PI*2);
-    ctx.fill();
+        const armor = ctx.createLinearGradient(0,y,0,y+p.size);
+        armor.addColorStop(0,'#1f6db1');
+        armor.addColorStop(1,'#0b2a4e');
 
-    // Banners
-    ctx.fillStyle = '#7b0000';
-    ctx.fillRect(screenX-size/2-20,70,14,120);
-    ctx.fillRect(screenX+size/2+45,70,14,120);
+        ctx.fillStyle = armor;
+        ctx.fillRect(p.x-p.size/4,y,p.size/2,p.size);
 
-    ctx.beginPath();
-    ctx.moveTo(screenX-size/2-6,70);
-    ctx.lineTo(screenX-size/2+70,95);
-    ctx.lineTo(screenX-size/2-6,120);
-    ctx.fill();
+        ctx.fillStyle = '#cccccc';
+        ctx.fillRect(p.x-p.size/6,y-p.size/5,p.size/3,p.size/5);
 
-    ctx.beginPath();
-    ctx.moveTo(screenX+size/2+59,70);
-    ctx.lineTo(screenX+size/2+135,95);
-    ctx.lineTo(screenX+size/2+59,120);
-    ctx.fill();
-
-    // Windows
-    ctx.fillStyle = '#130d08';
-    for(let i=0;i<5;i++){
-        ctx.fillRect(screenX-size/2+60+i*(size/5),170,20,45);
-    }
-
-    ctx.restore();
+        // Nameplate
+        ctx.fillStyle = 'white';
+        ctx.font = `${Math.max(12,p.size*0.12)}px Arial`;
+        ctx.fillText('Knight', p.x-20, y-15);
+    });
 }
 
 function drawEnemies(){
+    enemies.sort((a,b)=>{
+        const da = Math.hypot(a.x-player.x,a.y-player.y);
+        const db = Math.hypot(b.x-player.x,b.y-player.y);
+        return db-da;
+    });
+
     enemies.forEach(enemy=>{
         if(!enemy.alive) return;
 
-        const dx = enemy.x-player.x;
-        const dy = enemy.y-player.y;
+        const p = project(enemy.x, enemy.y);
+        if(!p) return;
 
-        const distance = Math.sqrt(dx*dx+dy*dy);
+        const y = canvas.height/2 + 120 - p.size;
 
-        const angle = Math.atan2(dy,dx)-player.angle;
-
-        while(angle < -Math.PI) angle += Math.PI*2;
-        while(angle > Math.PI) angle -= Math.PI*2;
-
-        if(Math.abs(angle) > 1.2) return;
-
-        const screenX = canvas.width/2 + Math.tan(angle)*700;
-        const size = Math.max(20,10000/(distance+1));
-
-        const y = canvas.height/2 + 100 - size;
-
-        ctx.fillStyle = '#220000';
+        ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath();
-        ctx.ellipse(screenX,y+size,size*0.45,size*0.2,0,0,Math.PI*2);
+        ctx.ellipse(p.x,y+p.size,p.size*0.45,p.size*0.2,0,0,Math.PI*2);
         ctx.fill();
 
-        ctx.fillStyle = '#6f0d0d';
-        ctx.fillRect(screenX-size/4,y,size/2,size);
+        const armor = ctx.createLinearGradient(0,y,0,y+p.size);
+        armor.addColorStop(0,'#b11f1f');
+        armor.addColorStop(1,'#4e0909');
 
-        ctx.fillStyle = '#8a8a8a';
-        ctx.fillRect(screenX-size/5,y+size*0.2,size*0.4,size*0.25);
+        ctx.fillStyle = armor;
+        ctx.fillRect(p.x-p.size/4,y,p.size/2,p.size);
+
+        ctx.fillStyle = '#9d9d9d';
+        ctx.fillRect(p.x-p.size/5,y+p.size*0.2,p.size*0.4,p.size*0.22);
 
         ctx.fillStyle = '#4b2d16';
-        ctx.fillRect(screenX-size*0.45,y+size*0.35,size*0.15,size*0.35);
+        ctx.fillRect(p.x-p.size*0.48,y+p.size*0.35,p.size*0.15,p.size*0.35);
 
         ctx.fillStyle = '#cccccc';
-        ctx.fillRect(screenX-size/6,y-size/5,size/3,size/5);
+        ctx.fillRect(p.x-p.size/6,y-p.size/5,p.size/3,p.size/5);
 
-        ctx.fillStyle = 'red';
-        ctx.fillRect(screenX-size/8,y+size*0.3,size/4,6);
+        if(p.dist < 110){
+            enemy.attackCooldown++;
 
-        if(distance < 120){
-            enemy.attackTimer++;
-
-            if(enemy.attackTimer > 40){
-                player.health -= 8;
-                enemy.attackTimer = 0;
+            if(enemy.attackCooldown > 50){
+                player.health -= 10;
+                enemy.attackCooldown = 0;
             }
         }
     });
 }
 
+function updateArrows(){
+    for(let index = arrows.length - 1; index >= 0; index--){
+        const arrow = arrows[index];
+        arrow.x += Math.cos(arrow.angle) * arrow.speed;
+        arrow.y += Math.sin(arrow.angle) * arrow.speed;
+        arrow.life--;
+
+        enemies.forEach(enemy=>{
+            if(!enemy.alive) return;
+
+            const dist = Math.hypot(enemy.x-arrow.x, enemy.y-arrow.y);
+
+            if(dist < 60){
+                enemy.health -= 60;
+                arrow.life = 0;
+
+                for(let i=0;i<10;i++){
+                    particles.push({
+                        x: enemy.x,
+                        y: enemy.y,
+                        vx:(Math.random()-0.5)*6,
+                        vy:(Math.random()-0.5)*6,
+                        life:30
+                    });
+                }
+
+                if(enemy.health <= 0){
+                    enemy.alive = false;
+                }
+            }
+        });
+
+        const proj = project(arrow.x, arrow.y);
+
+        if(proj){
+            ctx.save();
+            ctx.translate(proj.x, canvas.height/2 + 90);
+
+            ctx.strokeStyle = '#5b3a1e';
+            ctx.lineWidth = Math.max(1,proj.size*0.03);
+            ctx.beginPath();
+            ctx.moveTo(0,-proj.size*0.12);
+            ctx.lineTo(0,proj.size*0.12);
+            ctx.stroke();
+
+            ctx.fillStyle = '#cccccc';
+            ctx.beginPath();
+            ctx.moveTo(0,-proj.size*0.14);
+            ctx.lineTo(-proj.size*0.03,-proj.size*0.08);
+            ctx.lineTo(proj.size*0.03,-proj.size*0.08);
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        if(arrow.life <= 0){
+            arrows.splice(index,1);
+        }
+    }
+}
+
+function drawParticles(){
+    for(let index = particles.length - 1; index >= 0; index--){
+        const p = particles[index];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+
+        const proj = project(p.x,p.y);
+        if(proj){
+            ctx.fillStyle = 'rgba(180,0,0,0.7)';
+            ctx.beginPath();
+            ctx.arc(proj.x,canvas.height/2+80,proj.size*0.03,0,Math.PI*2);
+            ctx.fill();
+        }
+
+        if(p.life <= 0){
+            particles.splice(index,1);
+        }
+    }
+}
+
 function drawSword(){
+    if(currentWeapon !== 'sword') return;
+
     ctx.save();
 
-    const swing = attackAnim > 0 ? Math.sin(attackAnim*0.4)*140 : 0;
+    const swing = Math.sin(swordSwing*Math.PI)*120;
 
     ctx.translate(canvas.width-180+swing,canvas.height-120);
     ctx.rotate(-0.9 + swing*0.003);
 
     ctx.fillStyle = '#4b2d16';
-    ctx.fillRect(-12,70,24,95);
+    ctx.fillRect(-12,70,24,100);
 
-    const blade = ctx.createLinearGradient(-10,0,10,0);
-    blade.addColorStop(0,'#777');
-    blade.addColorStop(0.5,'#f0f0f0');
-    blade.addColorStop(1,'#666');
-
-    ctx.fillStyle = blade;
-    ctx.fillRect(-8,-240,16,320);
-
-    ctx.beginPath();
-    ctx.moveTo(-8,-240);
-    ctx.lineTo(0,-295);
-    ctx.lineTo(8,-240);
-    ctx.fill();
-
-    ctx.fillStyle = '#c8a45f';
+    ctx.fillStyle = '#c9a96d';
     ctx.fillRect(-35,55,70,12);
 
-    ctx.fillStyle = '#aa0000';
+    const blade = ctx.createLinearGradient(-10,0,10,0);
+    blade.addColorStop(0,'#666');
+    blade.addColorStop(0.5,'#f0f0f0');
+    blade.addColorStop(1,'#777');
+
+    ctx.shadowColor = 'rgba(255,255,255,0.5)';
+    ctx.shadowBlur = 16;
+
+    ctx.fillStyle = blade;
+    ctx.fillRect(-8,-260,16,320);
+
     ctx.beginPath();
-    ctx.arc(0,60,5,0,Math.PI*2);
+    ctx.moveTo(-8,-260);
+    ctx.lineTo(0,-320);
+    ctx.lineTo(8,-260);
     ctx.fill();
+
+    ctx.shadowBlur = 0;
 
     ctx.restore();
 
-    if(attackAnim > 0) attackAnim--;
+    swordSwing *= 0.84;
 }
 
-function drawTrees(){
-    for(let i=-6;i<7;i++){
-        const tx = player.x + i*320;
-        const ty = player.y + 500;
+function drawBow(){
+    if(currentWeapon !== 'bow') return;
 
-        const dx = tx-player.x;
-        const dy = ty-player.y;
+    ctx.save();
 
-        const angle = Math.atan2(dy,dx)-player.angle;
-        const dist = Math.sqrt(dx*dx+dy*dy);
+    ctx.translate(canvas.width-170, canvas.height-160);
+    ctx.rotate(-0.35);
 
-        if(Math.abs(angle) > 1.2) continue;
+    ctx.strokeStyle = '#5b3a1e';
+    ctx.lineWidth = 10;
+    ctx.beginPath();
+    ctx.arc(0,0,90,-1.2,1.2);
+    ctx.stroke();
 
-        const screenX = canvas.width/2 + Math.tan(angle)*700;
-        const size = 7000/dist;
+    ctx.strokeStyle = '#ddd';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(30,-82);
+    ctx.lineTo(30,82);
+    ctx.stroke();
 
-        // Tree trunk
-        ctx.fillStyle = '#3b2412';
-        ctx.fillRect(screenX-size*0.08,canvas.height/2+50,size*0.16,size*0.7);
+    // Arrow ready
+    ctx.strokeStyle = '#8b5a2b';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(-50,0);
+    ctx.lineTo(40,0);
+    ctx.stroke();
 
-        // Leaves
-        ctx.fillStyle = '#183f18';
-        ctx.beginPath();
-        ctx.arc(screenX,canvas.height/2,size*0.35,0,Math.PI*2);
-        ctx.fill();
-
-        // Hanging lantern
-        ctx.fillStyle = '#d4a84f';
-        ctx.fillRect(screenX-3,canvas.height/2+size*0.2,6,14);
-
-        const glow = ctx.createRadialGradient(screenX,canvas.height/2+size*0.3,2,screenX,canvas.height/2+size*0.3,25);
-        glow.addColorStop(0,'rgba(255,180,80,0.8)');
-        glow.addColorStop(1,'rgba(255,180,80,0)');
-
-        ctx.fillStyle = glow;
-        ctx.beginPath();
-        ctx.arc(screenX,canvas.height/2+size*0.3,25,0,Math.PI*2);
-        ctx.fill();
-    }
-}
-
-function gameOver(text){
-    message.style.display = 'block';
-    message.innerHTML = text + '<br><span style="font-size:28px">Refresh to play again</span>';
-}
-
-function drawVignette(){
-    const vignette = ctx.createRadialGradient(
-        canvas.width/2,
-        canvas.height/2,
-        canvas.width*0.2,
-        canvas.width/2,
-        canvas.height/2,
-        canvas.width*0.8
-    );
-
-    vignette.addColorStop(0,'rgba(0,0,0,0)');
-    vignette.addColorStop(1,'rgba(0,0,0,0.55)');
-
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.restore();
 }
 
 function drawRain(){
-    ctx.strokeStyle = 'rgba(180,180,220,0.2)';
+    ctx.strokeStyle = 'rgba(200,200,255,0.18)';
 
-    for(let i=0;i<120;i++){
-        const x = (i*97 + Date.now()/12)%canvas.width;
-        const y = (i*53 + Date.now()/8)%canvas.height;
+    for(let i=0;i<160;i++){
+        const x = (i*93 + Date.now()/9)%canvas.width;
+        const y = (i*57 + Date.now()/6)%canvas.height;
 
         ctx.beginPath();
         ctx.moveTo(x,y);
-        ctx.lineTo(x-6,y+18);
+        ctx.lineTo(x-8,y+22);
         ctx.stroke();
     }
+}
+
+function drawFog(){
+    const fog = ctx.createLinearGradient(0,0,0,canvas.height);
+    fog.addColorStop(0,'rgba(40,30,20,0.03)');
+    fog.addColorStop(1,'rgba(0,0,0,0.35)');
+
+    ctx.fillStyle = fog;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+}
+
+function endGame(text){
+    message.style.display = 'flex';
+    message.innerHTML = `${text}<span>Refresh to play again</span>`;
 }
 
 function update(){
@@ -515,39 +664,52 @@ function update(){
     movePlayer();
 
     drawSky();
+    drawStars();
     drawGround();
     drawCastle();
     drawTrees();
     drawEnemies();
+    drawRemotePlayers();
+    updateArrows();
+    drawParticles();
+    // Dynamic cinematic glow
+    const glow = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 100, canvas.width/2, canvas.height/2, 900);
+    glow.addColorStop(0,'rgba(255,180,80,0.04)');
+    glow.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
     drawSword();
+    drawBow();
     drawRain();
-    drawVignette();
+    drawFog();
 
     healthBar.style.width = player.health + '%';
 
+    if(player.health > 60){
+        healthBar.style.background = 'linear-gradient(to right,#00ff66,#0b7a34)';
+    } else if(player.health > 30){
+        healthBar.style.background = 'linear-gradient(to right,#ffb300,#cc6f00)';
+    } else {
+        healthBar.style.background = 'linear-gradient(to right,#ff3333,#6b0000)';
+    }
+
     if(player.health <= 0){
-        gameOver('You Were Defeated');
+        endGame('Defeat');
         return;
     }
 
-    const aliveEnemies = enemies.filter(e=>e.alive).length;
+    const alive = enemies.filter(e=>e.alive).length;
 
-    if(aliveEnemies === 0){
-        gameOver('Victory!');
+    if(alive === 0){
+        endGame('Victory');
         return;
     }
-
-    const fog = ctx.createLinearGradient(0,0,0,canvas.height);
-    fog.addColorStop(0,'rgba(40,30,20,0.05)');
-    fog.addColorStop(1,'rgba(0,0,0,0.35)');
-    ctx.fillStyle = fog;
-    ctx.fillRect(0,0,canvas.width,canvas.height);
 
     requestAnimationFrame(update);
 }
 
 update();
 </script>
-
 </body>
 </html>
