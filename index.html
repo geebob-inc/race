@@ -742,15 +742,10 @@ function saveChatHistory(){
         });
     });
 
+    // Save last 120 chat messages
     localStorage.setItem(
         'moto_chat_history',
         JSON.stringify(history.slice(-120))
-    );
-});
-
-    localStorage.setItem(
-        'moto_chat_history',
-        JSON.stringify(history.slice(-60))
     );
 }
 
@@ -1105,4 +1100,3 @@ window.addEventListener('resize',()=>{
 
 </body>
 </html>
-
