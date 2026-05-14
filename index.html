@@ -384,11 +384,19 @@ startBtn.onclick = ()=>{
     startBtn.innerText = 'RACING...';
 };
 
-// MULTIPLAYER SYSTEM
-// Local multiplayer simulation + ready for online sockets
-const multiplayerPlayers = {};
+// PEER-TO-PEER MULTIPLAYER
+// No dedicated server needed
+// Uses BroadcastChannel for same-browser/device multiplayer
+// and WebRTC-ready structure for future upgrades
 
-function addRemotePlayer(id,color){
+const multiplayerPlayers = {};
+const localPlayerId = 'player_' + Math.random().toString(36).substring(2,9);
+
+const channel = new BroadcastChannel('moto_multiplayer');
+
+function createRemotePlayer(id,color=0x00ff99){
+
+    if(multiplayerPlayers[id]) return;
 
     const remoteBike = bike.clone();
 
@@ -398,57 +406,45 @@ function addRemotePlayer(id,color){
         roughness:0.3
     });
 
-    remoteBike.position.set(
-        (Math.random()-0.5)*30,
-        1,
-        (Math.random()-0.5)*30
-    );
+    remoteBike.position.y = 1;
 
     multiplayerPlayers[id] = remoteBike;
+
     scene.add(remoteBike);
 }
 
-// Fake online players for demo
-addRemotePlayer('player2',0x00ff99);
-addRemotePlayer('player3',0x3399ff);
+channel.onmessage = (event)=>{
 
-function updateRemotePlayers(){
+    const data = event.data;
 
-    let index = 0;
+    if(!data || data.id === localPlayerId) return;
 
-    Object.values(multiplayerPlayers).forEach(player=>{
+    if(!multiplayerPlayers[data.id]){
+        createRemotePlayer(
+            data.id,
+            Math.random() * 0xffffff
+        );
+    }
 
-        const t = Date.now()*0.001 + index;
+    const player = multiplayerPlayers[data.id];
 
-        player.position.x = Math.sin(t)*70;
-        player.position.z = Math.cos(t)*70;
-        player.rotation.y = t;
-
-        index++;
-    });
-}
-
-// REAL ONLINE SERVER READY
-/*
-const socket = new WebSocket('ws://localhost:3000');
-
-socket.onopen = ()=>{
-    console.log('Connected to multiplayer server');
-};
-
-socket.onmessage = (event)=>{
-    const data = JSON.parse(event.data);
+    player.position.set(data.x,data.y,data.z);
+    player.rotation.y = data.rotation;
 };
 
 function syncPlayer(){
-    socket.send(JSON.stringify({
+
+    channel.postMessage({
+        id:localPlayerId,
         x:bike.position.x,
         y:bike.position.y,
         z:bike.position.z,
         rotation:bike.rotation.y
-    }));
+    });
 }
-*/
+
+// TEST PLAYER
+createRemotePlayer('demo_player',0x3399ff);
 
 // SIMPLE TESTS
 console.assert(scene instanceof THREE.Scene,'Scene failed');
@@ -508,7 +504,17 @@ function animate(){
             bike.position.z
         );
 
-        updateRemotePlayers();
+        // Demo rider movement
+        const demoPlayer = multiplayerPlayers['demo_player'];
+
+        if(demoPlayer){
+            const t = Date.now()*0.001;
+            demoPlayer.position.x = Math.sin(t)*70;
+            demoPlayer.position.z = Math.cos(t)*70;
+            demoPlayer.rotation.y = t;
+        }
+
+        syncPlayer();
 
         // AI MOVEMENT
         aiPlayers.forEach(ai=>{
@@ -543,8 +549,7 @@ function animate(){
     stars.rotation.y += 0.0004;
 
     // Reduce rendering cost on Chromebooks
-// Online sync placeholder
-        // syncPlayer();
+// Peer-to-peer sync active
 
 renderer.render(scene,camera);
 }
