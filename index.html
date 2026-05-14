@@ -107,6 +107,47 @@ canvas{
         SHIFT = Nitro<br>
         SPACE = Drift
     </div>
+
+</div>
+
+<div id="profileBox" style="position:absolute;left:290px;top:15px;width:240px;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.2);border-radius:18px;backdrop-filter:blur(10px);padding:14px;color:white;z-index:100;">
+
+    <div style="font-size:20px;font-weight:bold;color:#00e5ff;margin-bottom:10px;">
+        RIDER PROFILE
+    </div>
+
+    <input id="usernameInput" type="text" maxlength="14" placeholder="Enter username"
+    style="width:100%;padding:10px;border:none;border-radius:10px;background:#111;color:white;outline:none;margin-bottom:10px;">
+
+    <button id="saveProfileBtn"
+    style="width:100%;padding:10px;border:none;border-radius:10px;background:#00bfff;color:white;font-weight:bold;cursor:pointer;">
+    SAVE PROFILE
+    </button>
+
+    <div id="profileInfo" style="margin-top:12px;font-size:14px;line-height:1.7;opacity:0.9;">
+        Username: Guest<br>
+        Rank: Rookie Rider<br>
+        Wins: 0
+    </div>
+</div>
+
+<div id="chatBox" style="position:absolute;right:15px;top:15px;width:300px;height:360px;background:rgba(0,0,0,0.55);border:1px solid rgba(255,255,255,0.2);border-radius:18px;backdrop-filter:blur(10px);display:flex;flex-direction:column;z-index:100;color:white;overflow:hidden;">
+
+    <div style="padding:12px;font-size:20px;font-weight:bold;color:#00e5ff;border-bottom:1px solid rgba(255,255,255,0.15);">
+        LIVE CHAT
+    </div>
+
+    <div id="chatMessages" style="flex:1;padding:10px;overflow-y:auto;font-size:14px;"></div>
+
+    <div style="display:flex;padding:10px;gap:8px;background:rgba(255,255,255,0.04);">
+        <input id="chatInput" type="text" placeholder="Type message..."
+        style="flex:1;padding:10px;border:none;border-radius:10px;background:#111;color:white;outline:none;">
+
+        <button id="sendBtn"
+        style="padding:10px 14px;border:none;border-radius:10px;background:#00bfff;color:white;font-weight:bold;cursor:pointer;">
+        Send
+        </button>
+    </div>
 </div>
 
 <script>
@@ -520,8 +561,88 @@ startBtn.onclick = ()=>{
 
 const multiplayerPlayers = {};
 const localPlayerId = 'player_' + Math.random().toString(36).substring(2,9);
+let username = localStorage.getItem('moto_username') || 'Guest';
 
 const channel = new BroadcastChannel('moto_multiplayer');
+
+// PROFILE SYSTEM
+const usernameInput = document.getElementById('usernameInput');
+const saveProfileBtn = document.getElementById('saveProfileBtn');
+const profileInfo = document.getElementById('profileInfo');
+
+usernameInput.value = username;
+
+function updateProfile(){
+    profileInfo.innerHTML = `
+        Username: ${username}<br>
+        Rank: Rookie Rider<br>
+        Wins: 0
+    `;
+}
+
+updateProfile();
+
+saveProfileBtn.onclick = ()=>{
+
+    const newName = usernameInput.value.trim();
+
+    if(newName.length < 2) return;
+
+    username = newName;
+
+    localStorage.setItem('moto_username',username);
+
+    updateProfile();
+
+    addChatMessage('SYSTEM','Profile updated!',false);
+};
+
+// LIVE CHAT
+const chatMessages = document.getElementById('chatMessages');
+const chatInput = document.getElementById('chatInput');
+const sendBtn = document.getElementById('sendBtn');
+
+function addChatMessage(name,message,isLocal=false){
+
+    const msg = document.createElement('div');
+
+    msg.style.marginBottom = '8px';
+    msg.style.padding = '8px';
+    msg.style.borderRadius = '10px';
+    msg.style.background = isLocal
+        ? 'rgba(0,191,255,0.25)'
+        : 'rgba(255,255,255,0.08)';
+
+    msg.innerHTML = `<b>${name}:</b> ${message}`;
+
+    chatMessages.appendChild(msg);
+
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function sendChat(){
+
+    const text = chatInput.value.trim();
+
+    if(!text) return;
+
+    addChatMessage(username,text,true);
+
+    channel.postMessage({
+        type:'chat',
+        id:localPlayerId,
+        text:text,
+        username:username
+    });
+
+    chatInput.value = '';
+}
+
+sendBtn.onclick = sendChat;
+
+chatInput.addEventListener('keydown',e=>{
+    if(e.key === 'Enter') sendChat();
+});
 
 function createRemotePlayer(id,color=0x00ff99){
 
@@ -546,24 +667,62 @@ channel.onmessage = (event)=>{
 
     const data = event.data;
 
-    if(!data || data.id === localPlayerId) return;
+    if(!data) return;
+
+    // CHAT MESSAGES
+    if(data.type === 'chat'){
+
+        if(data.id !== localPlayerId){
+            addChatMessage(data.username || data.id,data.text,false);
+        }
+
+        return;
+    }
+
+    if(data.id === localPlayerId) return;
 
     if(!multiplayerPlayers[data.id]){
         createRemotePlayer(
             data.id,
             Math.random() * 0xffffff
         );
+
+        const nameTag = document.createElement('div');
+        nameTag.id = 'tag_' + data.id;
+        nameTag.style.position = 'absolute';
+        nameTag.style.color = 'white';
+        nameTag.style.fontSize = '12px';
+        nameTag.style.pointerEvents = 'none';
+        nameTag.style.fontWeight = 'bold';
+        nameTag.innerText = data.username || 'Rider';
+
+        document.body.appendChild(nameTag);
     }
 
     const player = multiplayerPlayers[data.id];
 
     player.position.set(data.x,data.y,data.z);
     player.rotation.y = data.rotation;
+
+    const vector = player.position.clone();
+    vector.project(camera);
+
+    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (-vector.y * 0.5 + 0.5) * window.innerHeight;
+
+    const tag = document.getElementById('tag_' + data.id);
+
+    if(tag){
+        tag.style.left = x + 'px';
+        tag.style.top = (y - 30) + 'px';
+        tag.innerText = data.username || 'Rider';
+    };
 };
 
 function syncPlayer(){
 
     channel.postMessage({
+        type:'player',
         id:localPlayerId,
         x:bike.position.x,
         y:bike.position.y,
@@ -580,6 +739,7 @@ console.assert(scene instanceof THREE.Scene,'Scene failed');
 console.assert(camera instanceof THREE.PerspectiveCamera,'Camera failed');
 console.assert(renderer instanceof THREE.WebGLRenderer,'Renderer failed');
 console.assert(bike.children.length >= 3,'Bike failed');
+console.assert(typeof username === 'string','Username failed');
 
 // GAME LOOP
 function animate(){
