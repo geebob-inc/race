@@ -1,3 +1,8 @@
+# 3D First-Person RPG Game (HTML)
+
+Save this as `index.html` and open it in a browser.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -110,11 +115,15 @@ animate();
 function startGame() {
     document.getElementById('startScreen').style.display = 'none';
     controls.lock();
+    camera.position.set(0, 5, 20);
 }
 
 function init() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87ceeb);
+
+    const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+    scene.add(ambient);
 
     camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 1, 1000);
 
@@ -125,7 +134,7 @@ function init() {
     controls = new THREE.PointerLockControls(camera, document.body);
     scene.add(controls.getObject());
 
-    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 2);
+    const light = new THREE.HemisphereLight(0xffffff, 0x444444, 3);
     scene.add(light);
 
     const floorGeometry = new THREE.PlaneGeometry(500, 500);
@@ -174,7 +183,7 @@ function init() {
         enemies.push(enemy);
     }
 
-    camera.position.y = 5;
+    camera.position.set(0, 5, 20);
 
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('keyup', onKeyUp);
