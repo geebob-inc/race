@@ -94,11 +94,12 @@ canvas{
 
 <div id="hud">
 MODE: <span id="mode">FPS</span><br>
-PLANETS DISCOVERED: <span id="count">0</span><br>
+INFINITE GALAXIES: <span id="count">0</span><br>
 E = Enter Ship<br>
 G = Warp
 L = Land
-SHIFT = Boost
+SHIFT = Boost<br>
+SPACE = Shoot Lasers
 </div>
 
 <div id="center"></div>
@@ -110,7 +111,9 @@ SHIFT = Boost
 let scene, camera, renderer;
 let ship;
 let planets = [];
+let galaxies = [];
 let stars = [];
+let bullets = [];
 
 let inShip = false;
 let warping = false;
@@ -143,6 +146,7 @@ function init(){
 
     renderer = new THREE.WebGLRenderer({antialias:true});
     renderer.setSize(window.innerWidth,window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
 
@@ -170,6 +174,15 @@ function init(){
     }
 
     controls();
+
+    window.addEventListener("resize",()=>{
+
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize(window.innerWidth,window.innerHeight);
+
+    });
 }
 
 function createStars(){
@@ -238,9 +251,10 @@ function createShip(){
     scene.add(ship);
 }
 
+// 🪐 PROCEDURAL PLANET GENERATOR
 function generatePlanet(){
 
-    const size = 20 + Math.random()*80;
+    const size = 20 + Math.random()*140;
 
     const color = new THREE.Color(
         Math.random(),
@@ -260,9 +274,9 @@ function generatePlanet(){
     );
 
     planet.position.set(
-        (Math.random()-0.5)*8000,
-        (Math.random()-0.5)*3000,
-        (Math.random()-0.5)*8000
+        ship.position.x + (Math.random()-0.5)*7000,
+        ship.position.y + (Math.random()-0.5)*2500,
+        ship.position.z - Math.random()*9000
     );
 
     // GLOW ATMOSPHERE
@@ -331,6 +345,10 @@ function controls(){
             inShip = !inShip;
             document.getElementById("mode").innerText = inShip ? "SHIP" : "FPS";
         }
+
+        if(e.code === "Space"){
+            shootLaser();
+        }
     });
 
     document.addEventListener("keyup",(e)=>{
@@ -342,6 +360,31 @@ function controls(){
         if(e.key==="Shift") move.shift=false;
         if(e.key==="g") move.g=false;
     });
+}
+
+function shootLaser(){
+
+    if(!inShip) return;
+
+    const laser = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08,0.08,8,8),
+        new THREE.MeshBasicMaterial({
+            color:0x00ffff
+        })
+    );
+
+    laser.rotation.z = Math.PI/2;
+
+    const forward = new THREE.Vector3(0,0,-1)
+        .applyQuaternion(ship.quaternion);
+
+    laser.position.copy(ship.position);
+    laser.quaternion.copy(ship.quaternion);
+
+    laser.velocity = forward.multiplyScalar(40);
+
+    scene.add(laser);
+    bullets.push(laser);
 }
 
 function warp(){
@@ -389,17 +432,18 @@ function animate(){
     // FPS MOVEMENT
     if(!inShip){
 
-        let dir = new THREE.Vector3();
+        const forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
+        forward.y = 0;
+        forward.normalize();
 
-        if(move.w) dir.z -= 1;
-        if(move.s) dir.z += 1;
-        if(move.a) dir.x -= 1;
-        if(move.d) dir.x += 1;
+        const right = new THREE.Vector3();
+        right.crossVectors(forward, camera.up).normalize();
 
-        dir.normalize();
-        dir.applyEuler(camera.rotation);
-
-        camera.position.addScaledVector(dir,0.5);
+        if(move.w) camera.position.addScaledVector(forward,0.8);
+        if(move.s) camera.position.addScaledVector(forward,-0.8);
+        if(move.a) camera.position.addScaledVector(right,0.8);
+        if(move.d) camera.position.addScaledVector(right,-0.8);
     }
 
     // SHIP MOVEMENT
@@ -418,16 +462,113 @@ function animate(){
         if(move.a) ship.position.addScaledVector(right,-speed);
         if(move.d) ship.position.addScaledVector(right,speed);
 
-        camera.position.copy(ship.position).add(new THREE.Vector3(0,2,0));
+        camera.position.copy(ship.position);
+        camera.position.y += 2;
     }
 
-    // PROCEDURAL INFINITE SPACE
+    // 🌌 INFINITE GALAXY GENERATION
     if(ship.position.length() > 2000){
 
-        for(let i=0;i<3;i++){
-            generatePlanet();
+        // GENERATE ENTIRE GALAXIES
+        for(let g=0; g<2; g++){
+
+            const galaxy = new THREE.Group();
+
+            const armCount = 4;
+            const starsPerArm = 400;
+
+            for(let arm=0; arm<armCount; arm++){
+
+                for(let s=0; s<starsPerArm; s++){
+
+                    const angle = (s * 0.08) + (arm * Math.PI/2);
+                    const radius = s * 2 + Math.random()*40;
+
+                    const x = Math.cos(angle) * radius;
+                    const z = Math.sin(angle) * radius;
+                    const y = (Math.random()-0.5) * 40;
+
+                    const star = new THREE.Mesh(
+                        new THREE.SphereGeometry(Math.random()*0.6,6,6),
+                        new THREE.MeshBasicMaterial({
+                            color:new THREE.Color(
+                                0.5 + Math.random()*0.5,
+                                0.5 + Math.random()*0.5,
+                                1
+                            )
+                        })
+                    );
+
+                    star.position.set(x,y,z);
+                    galaxy.add(star);
+                }
+            }
+
+            // GALAXY CORE
+            const core = new THREE.Mesh(
+                new THREE.SphereGeometry(35,32,32),
+                new THREE.MeshBasicMaterial({
+                    color:0xffffff
+                })
+            );
+
+            galaxy.add(core);
+
+            galaxy.position.set(
+                ship.position.x + (Math.random()-0.5)*20000,
+                ship.position.y + (Math.random()-0.5)*5000,
+                ship.position.z - 15000 - Math.random()*15000
+            );
+
+            galaxy.rotation.x = Math.random();
+            galaxy.rotation.z = Math.random();
+
+            galaxy.spinSpeed = 0.0002 + Math.random()*0.0005;
+
+            scene.add(galaxy);
+            galaxies.push(galaxy);
         }
+
+        document.getElementById("count").innerText = galaxies.length;
     }
+
+    // 🔫 SHIP LASERS
+    bullets.forEach((laser,index)=>{
+
+        laser.position.add(laser.velocity);
+
+        // remove distant lasers
+        if(laser.position.distanceTo(ship.position) > 5000){
+            scene.remove(laser);
+            bullets.splice(index,1);
+        }
+    });
+
+    // 🌌 GALAXY ROTATION
+    galaxies.forEach(galaxy=>{
+        galaxy.rotation.y += galaxy.spinSpeed;
+    });
+
+    // ✨ PARALLAX STAR MOVEMENT
+    stars.forEach((star,index)=>{
+
+        star.rotation.x += 0.0001;
+        star.rotation.y += 0.0001;
+
+        // recycle distant stars around player
+        if(star.position.distanceTo(ship.position) > 9000){
+
+            star.position.set(
+                ship.position.x + (Math.random()-0.5)*8000,
+                ship.position.y + (Math.random()-0.5)*8000,
+                ship.position.z + (Math.random()-0.5)*8000
+            );
+        }
+    });
+
+    // 🌠 DYNAMIC NEBULA FOG COLOR
+    const t = Date.now()*0.00005;
+    scene.fog.color.setHSL((t % 1),0.6,0.08);
 
     renderer.render(scene,camera);
 }
