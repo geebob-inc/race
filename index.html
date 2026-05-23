@@ -1,166 +1,440 @@
-# 3D First-Person RPG Game (GitHub Ready + Shooting)
+<!DOCTYPE html>
 
-Replace your entire file with this version.
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Infinite Galaxy Sandbox</title>
 
-```html
+<style>
+body{
+    margin:0;
+    overflow:hidden;
+    background:black;
+    font-family:Arial;
+}
+
+canvas{
+    display:block;
+}
+
+#hud{
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:#00ffff;
+    z-index:10;
+    background:rgba(0,0,0,0.4);
+    padding:10px;
+    border:1px solid cyan;
+    border-radius:10px;
+    box-shadow:0 0 20px cyan;
+}
+
+#center{
+    position:absolute;
+    top:50%;
+    width:100%;
+    text-align:center;
+    color:white;
+    font-size:40px;
+    text-shadow:0 0 20px cyan;
+    transform:translateY(-50%);
+    pointer-events:none;
+}
+</style>
+
+</head>
+<body>
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Shadow Agent RPG</title>
+<title>Infinite Galaxy Sandbox</title>
+
 <style>
-body { margin:0; overflow:hidden; font-family:Arial; background:#000; }
-canvas { display:block; }
+body{
+    margin:0;
+    overflow:hidden;
+    background:black;
+    font-family:Arial;
+}
+
+canvas{
+    display:block;
+}
 
 #hud{
     position:absolute;
-    top:20px;
-    left:20px;
-    color:white;
-    background:rgba(0,0,0,0.6);
-    padding:15px;
-    border-radius:12px;
+    top:10px;
+    left:10px;
+    color:#00ffff;
     z-index:10;
-    width:220px;
+    background:rgba(0,0,0,0.4);
+    padding:10px;
+    border:1px solid cyan;
+    border-radius:10px;
+    box-shadow:0 0 20px cyan;
 }
 
-.bar{height:12px; margin:5px 0; border-radius:10px;}
-.health{background:red; width:100%;}
-.shield{background:dodgerblue; width:80%;}
-.energy{background:limegreen; width:60%;}
-
-#crosshair{
+#center{
     position:absolute;
-    top:50%; left:50%;
-    transform:translate(-50%,-50%);
+    top:50%;
+    width:100%;
+    text-align:center;
     color:white;
-    font-size:28px;
-    z-index:10;
+    font-size:40px;
+    text-shadow:0 0 20px cyan;
+    transform:translateY(-50%);
+    pointer-events:none;
 }
 </style>
+
 </head>
 <body>
 
 <div id="hud">
-<h2>Agent</h2>
-<div class="bar health"></div>
-<div class="bar shield"></div>
-<div class="bar energy"></div>
-<p>Level 1</p>
-<p id="ammo">Ammo: ∞</p>
+MODE: <span id="mode">FPS</span><br>
+PLANETS DISCOVERED: <span id="count">0</span><br>
+E = Enter Ship<br>
+G = Warp
+L = Land
+SHIFT = Boost
 </div>
-<div id="crosshair">+</div>
 
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/js/controls/PointerLockControls.js"></script>
+<div id="center"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 
 <script>
-let scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
 
-let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-camera.position.set(0, 5, 10);
+let scene, camera, renderer;
+let ship;
+let planets = [];
+let stars = [];
 
-let renderer = new THREE.WebGLRenderer({antialias:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
-document.body.appendChild(renderer.domElement);
+let inShip = false;
+let warping = false;
 
-let controls = new THREE.PointerLockControls(camera, document.body);
-document.body.addEventListener('click', () => controls.lock());
-scene.add(controls.getObject());
+let move = {
+    w:false,
+    a:false,
+    s:false,
+    d:false,
+    shift:false,
+    g:false
+};
 
-// LIGHT
-scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));
+init();
+animate();
 
-// GROUND
-let ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(1000,1000),
-    new THREE.MeshPhongMaterial({color:0x3c7a3c})
-);
-ground.rotation.x = -Math.PI/2;
-scene.add(ground);
+function init(){
 
-// CASTLE
-let castle = new THREE.Mesh(
-    new THREE.BoxGeometry(50,60,50),
-    new THREE.MeshPhongMaterial({color:0x888888})
-);
-castle.position.set(0,30,-100);
-scene.add(castle);
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000814,0.0007);
 
-// ENEMIES
-let enemies=[];
-for(let i=0;i<6;i++){
-    let e = new THREE.Mesh(
-        new THREE.BoxGeometry(3,6,3),
-        new THREE.MeshPhongMaterial({color:0xff0000})
+    camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth/window.innerHeight,
+        0.1,
+        10000
     );
-    e.position.set((Math.random()-0.5)*100,3,(Math.random()-0.5)*100);
-    scene.add(e);
-    enemies.push(e);
+
+    camera.position.set(0,2,10);
+
+    renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth,window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+
+    // LIGHTING
+    const ambient = new THREE.AmbientLight(0x555555);
+    scene.add(ambient);
+
+    const blueLight = new THREE.PointLight(0x00ffff,3,2000);
+    blueLight.position.set(0,50,0);
+    scene.add(blueLight);
+
+    const purpleLight = new THREE.PointLight(0xaa00ff,2,3000);
+    purpleLight.position.set(300,100,-300);
+    scene.add(purpleLight);
+
+    // MASSIVE STARFIELD
+    createStars();
+
+    // SHIP
+    createShip();
+
+    // STARTER PLANETS
+    for(let i=0;i<15;i++){
+        generatePlanet();
+    }
+
+    controls();
 }
 
-// MOVEMENT
-let moveF=false, moveB=false, moveL=false, moveR=false;
+function createStars(){
 
-document.addEventListener('keydown',e=>{
-    if(e.code==='KeyW') moveF=true;
-    if(e.code==='KeyS') moveB=true;
-    if(e.code==='KeyA') moveL=true;
-    if(e.code==='KeyD') moveR=true;
-});
+    for(let i=0;i<4000;i++){
 
-document.addEventListener('keyup',e=>{
-    if(e.code==='KeyW') moveF=false;
-    if(e.code==='KeyS') moveB=false;
-    if(e.code==='KeyA') moveL=false;
-    if(e.code==='KeyD') moveR=false;
-});
+        let star = new THREE.Mesh(
+            new THREE.SphereGeometry(Math.random()*0.4,6,6),
+            new THREE.MeshBasicMaterial({
+                color: new THREE.Color(
+                    Math.random(),
+                    Math.random(),
+                    Math.random()
+                )
+            })
+        );
 
-// SHOOTING (RAYCAST)
-const raycaster = new THREE.Raycaster();
-const direction = new THREE.Vector3();
+        star.position.set(
+            (Math.random()-0.5)*12000,
+            (Math.random()-0.5)*12000,
+            (Math.random()-0.5)*12000
+        );
 
-function shoot(){
-    if(!controls.isLocked) return;
-
-    camera.getWorldDirection(direction);
-
-    raycaster.set(camera.position, direction);
-
-    const hits = raycaster.intersectObjects(enemies);
-
-    if(hits.length > 0){
-        const enemy = hits[0].object;
-        scene.remove(enemy);
-        enemies = enemies.filter(e => e !== enemy);
+        scene.add(star);
+        stars.push(star);
     }
 }
 
-document.addEventListener('mousedown', shoot);
+function createShip(){
+
+    let body = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5,2,12,12),
+        new THREE.MeshStandardMaterial({
+            color:0x222244,
+            emissive:0x0044ff,
+            metalness:1,
+            roughness:0.2
+        })
+    );
+
+    body.rotation.z = Math.PI/2;
+
+    ship = new THREE.Group();
+    ship.add(body);
+
+    // ENGINES
+    for(let i=-1;i<=1;i+=2){
+
+        let engine = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.4,0.4,2,10),
+            new THREE.MeshStandardMaterial({
+                color:0x00ffff,
+                emissive:0x00ffff,
+                emissiveIntensity:2
+            })
+        );
+
+        engine.rotation.z = Math.PI/2;
+        engine.position.set(-5,i*1.5,0);
+
+        ship.add(engine);
+    }
+
+    ship.position.set(0,3,0);
+
+    scene.add(ship);
+}
+
+function generatePlanet(){
+
+    const size = 20 + Math.random()*80;
+
+    const color = new THREE.Color(
+        Math.random(),
+        Math.random(),
+        Math.random()
+    );
+
+    const planet = new THREE.Mesh(
+        new THREE.SphereGeometry(size,64,64),
+        new THREE.MeshStandardMaterial({
+            color:color,
+            emissive:color,
+            emissiveIntensity:0.15,
+            roughness:0.7,
+            metalness:0.2
+        })
+    );
+
+    planet.position.set(
+        (Math.random()-0.5)*8000,
+        (Math.random()-0.5)*3000,
+        (Math.random()-0.5)*8000
+    );
+
+    // GLOW ATMOSPHERE
+    const glow = new THREE.Mesh(
+        new THREE.SphereGeometry(size*1.08,32,32),
+        new THREE.MeshBasicMaterial({
+            color:color,
+            transparent:true,
+            opacity:0.18
+        })
+    );
+
+    planet.add(glow);
+
+    // MOONS
+    if(Math.random() > 0.5){
+
+        const moon = new THREE.Mesh(
+            new THREE.SphereGeometry(size*0.2,24,24),
+            new THREE.MeshStandardMaterial({
+                color:0xaaaaaa,
+                emissive:0x222222
+            })
+        );
+
+        moon.position.set(size*2,0,0);
+        planet.add(moon);
+    }
+
+    planet.rotationSpeed = (Math.random()*0.003)+0.0005;
+
+    scene.add(planet);
+    planets.push(planet);
+
+    document.getElementById("count").innerText = planets.length;
+}
+
+function controls(){
+
+    document.addEventListener("click",()=>{
+        document.body.requestPointerLock();
+    });
+
+    document.addEventListener("mousemove",(e)=>{
+
+        if(document.pointerLockElement !== document.body) return;
+
+        if(inShip){
+            ship.rotation.y -= e.movementX * 0.002;
+        }else{
+            camera.rotation.y -= e.movementX * 0.002;
+            camera.rotation.x -= e.movementY * 0.002;
+        }
+    });
+
+    document.addEventListener("keydown",(e)=>{
+
+        if(e.key==="w") move.w=true;
+        if(e.key==="a") move.a=true;
+        if(e.key==="s") move.s=true;
+        if(e.key==="d") move.d=true;
+        if(e.key==="Shift") move.shift=true;
+        if(e.key==="g") move.g=true;
+
+        if(e.key==="e"){
+            inShip = !inShip;
+            document.getElementById("mode").innerText = inShip ? "SHIP" : "FPS";
+        }
+    });
+
+    document.addEventListener("keyup",(e)=>{
+
+        if(e.key==="w") move.w=false;
+        if(e.key==="a") move.a=false;
+        if(e.key==="s") move.s=false;
+        if(e.key==="d") move.d=false;
+        if(e.key==="Shift") move.shift=false;
+        if(e.key==="g") move.g=false;
+    });
+}
+
+function warp(){
+
+    if(!inShip) return;
+
+    if(move.g && !warping){
+
+        warping = true;
+
+        document.getElementById("center").innerText = "WARP DRIVE";
+
+        // WARP SPEED
+        setTimeout(()=>{
+
+            let forward = new THREE.Vector3(0,0,-1)
+                .applyQuaternion(ship.quaternion);
+
+            ship.position.addScaledVector(forward,3000);
+
+            // GENERATE NEW PLANETS AHEAD
+            for(let i=0;i<5;i++){
+                generatePlanet();
+            }
+
+            document.getElementById("center").innerText = "";
+
+            warping = false;
+
+        },1000);
+    }
+}
 
 function animate(){
+
     requestAnimationFrame(animate);
 
-    if(controls.isLocked){
-        if(moveF) controls.moveForward(0.5);
-        if(moveB) controls.moveForward(-0.5);
-        if(moveL) controls.moveRight(-0.5);
-        if(moveR) controls.moveRight(0.5);
+    warp();
+
+    // ROTATE PLANETS
+    planets.forEach(p=>{
+        p.rotation.y += p.rotationSpeed;
+    });
+
+    // FPS MOVEMENT
+    if(!inShip){
+
+        let dir = new THREE.Vector3();
+
+        if(move.w) dir.z -= 1;
+        if(move.s) dir.z += 1;
+        if(move.a) dir.x -= 1;
+        if(move.d) dir.x += 1;
+
+        dir.normalize();
+        dir.applyEuler(camera.rotation);
+
+        camera.position.addScaledVector(dir,0.5);
+    }
+
+    // SHIP MOVEMENT
+    else if(!warping){
+
+        const speed = move.shift ? 8 : 2;
+
+        let forward = new THREE.Vector3(0,0,-1)
+            .applyQuaternion(ship.quaternion);
+
+        let right = new THREE.Vector3(1,0,0)
+            .applyQuaternion(ship.quaternion);
+
+        if(move.w) ship.position.addScaledVector(forward,speed);
+        if(move.s) ship.position.addScaledVector(forward,-speed);
+        if(move.a) ship.position.addScaledVector(right,-speed);
+        if(move.d) ship.position.addScaledVector(right,speed);
+
+        camera.position.copy(ship.position).add(new THREE.Vector3(0,2,0));
+    }
+
+    // PROCEDURAL INFINITE SPACE
+    if(ship.position.length() > 2000){
+
+        for(let i=0;i<3;i++){
+            generatePlanet();
+        }
     }
 
     renderer.render(scene,camera);
 }
 
-animate();
-
-window.addEventListener('resize',()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth,window.innerHeight);
-});
 </script>
 
 </body>
 </html>
-```
+</body>
+</html>
