@@ -1,581 +1,536 @@
-<!DOCTYPE html>
+# Spider‑Man Swinging Game (Single HTML File)
 
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Infinite Galaxy Sandbox</title>
+Save this as `index.html` and open it in your browser or upload it to GitHub Pages.
 
-<style>
-body{
-    margin:0;
-    overflow:hidden;
-    background:black;
-    font-family:Arial;
-}
-
-canvas{
-    display:block;
-}
-
-#hud{
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:#00ffff;
-    z-index:10;
-    background:rgba(0,0,0,0.4);
-    padding:10px;
-    border:1px solid cyan;
-    border-radius:10px;
-    box-shadow:0 0 20px cyan;
-}
-
-#center{
-    position:absolute;
-    top:50%;
-    width:100%;
-    text-align:center;
-    color:white;
-    font-size:40px;
-    text-shadow:0 0 20px cyan;
-    transform:translateY(-50%);
-    pointer-events:none;
-}
-</style>
-
-</head>
-<body>
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Infinite Galaxy Sandbox</title>
-
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Spider-man Swing</title>
 <style>
-body{
-    margin:0;
-    overflow:hidden;
-    background:black;
-    font-family:Arial;
+body {
+    margin: 0;
+    overflow: hidden;
+    background: linear-gradient(#1b1f3a, #0a0d1f);
+    font-family: Arial, sans-serif;
 }
 
-canvas{
-    display:block;
+canvas {
+    display: block;
 }
 
-#hud{
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:#00ffff;
-    z-index:10;
-    background:rgba(0,0,0,0.4);
-    padding:10px;
-    border:1px solid cyan;
-    border-radius:10px;
-    box-shadow:0 0 20px cyan;
+#ui {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: white;
+    z-index: 10;
+    font-size: 20px;
 }
 
-#center{
-    position:absolute;
-    top:50%;
-    width:100%;
-    text-align:center;
-    color:white;
-    font-size:40px;
-    text-shadow:0 0 20px cyan;
-    transform:translateY(-50%);
-    pointer-events:none;
+#instructions {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    color: white;
+    z-index: 10;
+    font-size: 16px;
 }
 </style>
-
 </head>
 <body>
-
-<div id="hud">
-MODE: <span id="mode">FPS</span><br>
-INFINITE GALAXIES: <span id="count">0</span><br>
-E = Enter Ship<br>
-G = Warp
-L = Land
-SHIFT = Boost<br>
-SPACE = Shoot Lasers
+<div id="ui">Distance: <span id="score">0</span></div>
+<div id="instructions">
+SPACE = Shoot Web | Release SPACE = Swing<br>
+A/D = Move Left/Right
 </div>
 
-<div id="center"></div>
-
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<canvas id="game"></canvas>
 
 <script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-let scene, camera, renderer;
-let ship;
-let planets = [];
-let galaxies = [];
-let stars = [];
-let bullets = [];
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-let inShip = false;
-let warping = false;
+window.addEventListener("resize", () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
 
-let move = {
-    w:false,
-    a:false,
-    s:false,
-    d:false,
-    shift:false,
-    g:false
+const gravity = 0.5;
+const buildings = [];
+const scoreEl = document.getElementById("score");
+
+let cameraX = 0;
+let score = 0;
+
+for (let i = 0; i < 50; i++) {
+    const width = 120 + Math.random() * 100;
+    const height = 200 + Math.random() * 300;
+
+    buildings.push({
+        x: i * 250,
+        y: canvas.height - height,
+        width,
+        height
+    });
+}
+
+const player = {
+    x: 200,
+    y: 300,
+    radius: 18,
+    vx: 0,
+    vy: 0,
+    speed: 0.5,
+    webActive: false,
+    anchorX: 0,
+    anchorY: 0,
+    ropeLength: 0
 };
 
-init();
-animate();
+const keys = {};
 
-function init(){
+window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
 
-    scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x000814,0.0007);
-
-    camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth/window.innerHeight,
-        0.1,
-        10000
-    );
-
-    camera.position.set(0,2,10);
-
-    renderer = new THREE.WebGLRenderer({antialias:true});
-    renderer.setSize(window.innerWidth,window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    // LIGHTING
-    const ambient = new THREE.AmbientLight(0x555555);
-    scene.add(ambient);
-
-    const blueLight = new THREE.PointLight(0x00ffff,3,2000);
-    blueLight.position.set(0,50,0);
-    scene.add(blueLight);
-
-    const purpleLight = new THREE.PointLight(0xaa00ff,2,3000);
-    purpleLight.position.set(300,100,-300);
-    scene.add(purpleLight);
-
-    // MASSIVE STARFIELD
-    createStars();
-
-    // SHIP
-    createShip();
-
-    // STARTER PLANETS
-    for(let i=0;i<15;i++){
-        generatePlanet();
+    if (e.code === "Space" && !player.webActive) {
+        shootWeb();
     }
+});
 
-    controls();
+window.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
 
-    window.addEventListener("resize",()=>{
-
-        camera.aspect = window.innerWidth/window.innerHeight;
-        camera.updateProjectionMatrix();
-
-        renderer.setSize(window.innerWidth,window.innerHeight);
-
-    });
-}
-
-function createStars(){
-
-    for(let i=0;i<4000;i++){
-
-        let star = new THREE.Mesh(
-            new THREE.SphereGeometry(Math.random()*0.4,6,6),
-            new THREE.MeshBasicMaterial({
-                color: new THREE.Color(
-                    Math.random(),
-                    Math.random(),
-                    Math.random()
-                )
-            })
-        );
-
-        star.position.set(
-            (Math.random()-0.5)*12000,
-            (Math.random()-0.5)*12000,
-            (Math.random()-0.5)*12000
-        );
-
-        scene.add(star);
-        stars.push(star);
+    if (e.code === "Space") {
+        player.webActive = false;
     }
-}
+});
 
-function createShip(){
+function shootWeb() {
+    let nearest = null;
+    let bestDist = Infinity;
 
-    let body = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.5,2,12,12),
-        new THREE.MeshStandardMaterial({
-            color:0x222244,
-            emissive:0x0044ff,
-            metalness:1,
-            roughness:0.2
-        })
-    );
+    for (const b of buildings) {
+        const topX = b.x + b.width / 2;
+        const topY = b.y;
 
-    body.rotation.z = Math.PI/2;
+        const dx = topX - player.x;
+        const dy = topY - player.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-    ship = new THREE.Group();
-    ship.add(body);
-
-    // ENGINES
-    for(let i=-1;i<=1;i+=2){
-
-        let engine = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.4,0.4,2,10),
-            new THREE.MeshStandardMaterial({
-                color:0x00ffff,
-                emissive:0x00ffff,
-                emissiveIntensity:2
-            })
-        );
-
-        engine.rotation.z = Math.PI/2;
-        engine.position.set(-5,i*1.5,0);
-
-        ship.add(engine);
-    }
-
-    ship.position.set(0,3,0);
-
-    scene.add(ship);
-}
-
-// 🪐 PROCEDURAL PLANET GENERATOR
-function generatePlanet(){
-
-    const size = 20 + Math.random()*140;
-
-    const color = new THREE.Color(
-        Math.random(),
-        Math.random(),
-        Math.random()
-    );
-
-    const planet = new THREE.Mesh(
-        new THREE.SphereGeometry(size,64,64),
-        new THREE.MeshStandardMaterial({
-            color:color,
-            emissive:color,
-            emissiveIntensity:0.15,
-            roughness:0.7,
-            metalness:0.2
-        })
-    );
-
-    planet.position.set(
-        ship.position.x + (Math.random()-0.5)*7000,
-        ship.position.y + (Math.random()-0.5)*2500,
-        ship.position.z - Math.random()*9000
-    );
-
-    // GLOW ATMOSPHERE
-    const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(size*1.08,32,32),
-        new THREE.MeshBasicMaterial({
-            color:color,
-            transparent:true,
-            opacity:0.18
-        })
-    );
-
-    planet.add(glow);
-
-    // MOONS
-    if(Math.random() > 0.5){
-
-        const moon = new THREE.Mesh(
-            new THREE.SphereGeometry(size*0.2,24,24),
-            new THREE.MeshStandardMaterial({
-                color:0xaaaaaa,
-                emissive:0x222222
-            })
-        );
-
-        moon.position.set(size*2,0,0);
-        planet.add(moon);
-    }
-
-    planet.rotationSpeed = (Math.random()*0.003)+0.0005;
-
-    scene.add(planet);
-    planets.push(planet);
-
-    document.getElementById("count").innerText = planets.length;
-}
-
-function controls(){
-
-    document.addEventListener("click",()=>{
-        document.body.requestPointerLock();
-    });
-
-    document.addEventListener("mousemove",(e)=>{
-
-        if(document.pointerLockElement !== document.body) return;
-
-        if(inShip){
-            ship.rotation.y -= e.movementX * 0.002;
-        }else{
-            camera.rotation.y -= e.movementX * 0.002;
-            camera.rotation.x -= e.movementY * 0.002;
+        if (dist < bestDist && topY < player.y) {
+            bestDist = dist;
+            nearest = { x: topX, y: topY };
         }
-    });
+    }
 
-    document.addEventListener("keydown",(e)=>{
+    if (nearest) {
+        player.webActive = true;
+        player.anchorX = nearest.x;
+        player.anchorY = nearest.y;
 
-        if(e.key==="w") move.w=true;
-        if(e.key==="a") move.a=true;
-        if(e.key==="s") move.s=true;
-        if(e.key==="d") move.d=true;
-        if(e.key==="Shift") move.shift=true;
-        if(e.key==="g") move.g=true;
+        const dx = player.x - nearest.x;
+        const dy = player.y - nearest.y;
 
-        if(e.key==="e"){
-            inShip = !inShip;
-            document.getElementById("mode").innerText = inShip ? "SHIP" : "FPS";
-        }
-
-        if(e.code === "Space"){
-            shootLaser();
-        }
-    });
-
-    document.addEventListener("keyup",(e)=>{
-
-        if(e.key==="w") move.w=false;
-        if(e.key==="a") move.a=false;
-        if(e.key==="s") move.s=false;
-        if(e.key==="d") move.d=false;
-        if(e.key==="Shift") move.shift=false;
-        if(e.key==="g") move.g=false;
-    });
+        player.ropeLength = Math.sqrt(dx * dx + dy * dy);
+    }
 }
 
-function shootLaser(){
+function update() {
+    if (keys["a"]) player.vx -= player.speed;
+    if (keys["d"]) player.vx += player.speed;
 
-    if(!inShip) return;
+    player.vy += gravity;
 
-    const laser = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08,0.08,8,8),
-        new THREE.MeshBasicMaterial({
-            color:0x00ffff
-        })
-    );
+    player.x += player.vx;
+    player.y += player.vy;
 
-    laser.rotation.z = Math.PI/2;
+    player.vx *= 0.99;
+    player.vy *= 0.995;
 
-    const forward = new THREE.Vector3(0,0,-1)
-        .applyQuaternion(ship.quaternion);
+    if (player.webActive) {
+        const dx = player.x - player.anchorX;
+        const dy = player.y - player.anchorY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-    laser.position.copy(ship.position);
-    laser.quaternion.copy(ship.quaternion);
+        if (dist > player.ropeLength) {
+            const angle = Math.atan2(dy, dx);
 
-    laser.velocity = forward.multiplyScalar(40);
+            player.x = player.anchorX + Math.cos(angle) * player.ropeLength;
+            player.y = player.anchorY + Math.sin(angle) * player.ropeLength;
 
-    scene.add(laser);
-    bullets.push(laser);
+            const pull = 0.5;
+            player.vx -= Math.cos(angle) * pull;
+            player.vy -= Math.sin(angle) * pull;
+        }
+    }
+
+    const ground = canvas.height + 200;
+
+    if (player.y > ground) {
+        player.x = 200;
+        player.y = 300;
+        player.vx = 0;
+        player.vy = 0;
+        score = 0;
+    }
+
+    cameraX = player.x - 200;
+    score = Math.floor(player.x / 10);
+    scoreEl.textContent = score;
 }
 
-function warp(){
+function drawBackground() {
+    ctx.fillStyle = "#0a0d1f";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if(!inShip) return;
+    for (let i = 0; i < 200; i++) {
+        ctx.fillStyle = "white";
+        ctx.fillRect((i * 97 - cameraX * 0.2) % 3000, (i * 53) % canvas.height, 2, 2);
+    }
+}
 
-    if(move.g && !warping){
+function drawBuildings() {
+    for (const b of buildings) {
+        const bx = b.x - cameraX;
 
-        warping = true;
+        ctx.fillStyle = "#1f2937";
+        ctx.fillRect(bx, b.y, b.width, b.height);
 
-        document.getElementById("center").innerText = "WARP DRIVE";
+        ctx.fillStyle = "#ffd966";
 
-        // WARP SPEED
-        setTimeout(()=>{
-
-            let forward = new THREE.Vector3(0,0,-1)
-                .applyQuaternion(ship.quaternion);
-
-            ship.position.addScaledVector(forward,3000);
-
-            // GENERATE NEW PLANETS AHEAD
-            for(let i=0;i<5;i++){
-                generatePlanet();
+        for (let y = b.y + 20; y < b.y + b.height - 20; y += 30) {
+            for (let x = bx + 15; x < bx + b.width - 15; x += 25) {
+                ctx.fillRect(x, y, 10, 15);
             }
-
-            document.getElementById("center").innerText = "";
-
-            warping = false;
-
-        },1000);
+        }
     }
 }
 
-function animate(){
+function drawWeb() {
+    if (!player.webActive) return;
 
-    requestAnimationFrame(animate);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
 
-    warp();
-
-    // ROTATE PLANETS
-    planets.forEach(p=>{
-        p.rotation.y += p.rotationSpeed;
-    });
-
-    // FPS MOVEMENT
-    if(!inShip){
-
-        const forward = new THREE.Vector3();
-        camera.getWorldDirection(forward);
-        forward.y = 0;
-        forward.normalize();
-
-        const right = new THREE.Vector3();
-        right.crossVectors(forward, camera.up).normalize();
-
-        if(move.w) camera.position.addScaledVector(forward,0.8);
-        if(move.s) camera.position.addScaledVector(forward,-0.8);
-        if(move.a) camera.position.addScaledVector(right,0.8);
-        if(move.d) camera.position.addScaledVector(right,-0.8);
-    }
-
-    // SHIP MOVEMENT
-    else if(!warping){
-
-        const speed = move.shift ? 8 : 2;
-
-        let forward = new THREE.Vector3(0,0,-1)
-            .applyQuaternion(ship.quaternion);
-
-        let right = new THREE.Vector3(1,0,0)
-            .applyQuaternion(ship.quaternion);
-
-        if(move.w) ship.position.addScaledVector(forward,speed);
-        if(move.s) ship.position.addScaledVector(forward,-speed);
-        if(move.a) ship.position.addScaledVector(right,-speed);
-        if(move.d) ship.position.addScaledVector(right,speed);
-
-        camera.position.copy(ship.position);
-        camera.position.y += 2;
-    }
-
-    // 🌌 INFINITE GALAXY GENERATION
-    if(ship.position.length() > 2000){
-
-        // GENERATE ENTIRE GALAXIES
-        for(let g=0; g<2; g++){
-
-            const galaxy = new THREE.Group();
-
-            const armCount = 4;
-            const starsPerArm = 400;
-
-            for(let arm=0; arm<armCount; arm++){
-
-                for(let s=0; s<starsPerArm; s++){
-
-                    const angle = (s * 0.08) + (arm * Math.PI/2);
-                    const radius = s * 2 + Math.random()*40;
-
-                    const x = Math.cos(angle) * radius;
-                    const z = Math.sin(angle) * radius;
-                    const y = (Math.random()-0.5) * 40;
-
-                    const star = new THREE.Mesh(
-                        new THREE.SphereGeometry(Math.random()*0.6,6,6),
-                        new THREE.MeshBasicMaterial({
-                            color:new THREE.Color(
-                                0.5 + Math.random()*0.5,
-                                0.5 + Math.random()*0.5,
-                                1
-                            )
-                        })
-                    );
-
-                    star.position.set(x,y,z);
-                    galaxy.add(star);
-                }
-            }
-
-            // GALAXY CORE
-            const core = new THREE.Mesh(
-                new THREE.SphereGeometry(35,32,32),
-                new THREE.MeshBasicMaterial({
-                    color:0xffffff
-                })
-            );
-
-            galaxy.add(core);
-
-            galaxy.position.set(
-                ship.position.x + (Math.random()-0.5)*20000,
-                ship.position.y + (Math.random()-0.5)*5000,
-                ship.position.z - 15000 - Math.random()*15000
-            );
-
-            galaxy.rotation.x = Math.random();
-            galaxy.rotation.z = Math.random();
-
-            galaxy.spinSpeed = 0.0002 + Math.random()*0.0005;
-
-            scene.add(galaxy);
-            galaxies.push(galaxy);
-        }
-
-        document.getElementById("count").innerText = galaxies.length;
-    }
-
-    // 🔫 SHIP LASERS
-    bullets.forEach((laser,index)=>{
-
-        laser.position.add(laser.velocity);
-
-        // remove distant lasers
-        if(laser.position.distanceTo(ship.position) > 5000){
-            scene.remove(laser);
-            bullets.splice(index,1);
-        }
-    });
-
-    // 🌌 GALAXY ROTATION
-    galaxies.forEach(galaxy=>{
-        galaxy.rotation.y += galaxy.spinSpeed;
-    });
-
-    // ✨ PARALLAX STAR MOVEMENT
-    stars.forEach((star,index)=>{
-
-        star.rotation.x += 0.0001;
-        star.rotation.y += 0.0001;
-
-        // recycle distant stars around player
-        if(star.position.distanceTo(ship.position) > 9000){
-
-            star.position.set(
-                ship.position.x + (Math.random()-0.5)*8000,
-                ship.position.y + (Math.random()-0.5)*8000,
-                ship.position.z + (Math.random()-0.5)*8000
-            );
-        }
-    });
-
-    // 🌠 DYNAMIC NEBULA FOG COLOR
-    const t = Date.now()*0.00005;
-    scene.fog.color.setHSL((t % 1),0.6,0.08);
-
-    renderer.render(scene,camera);
+    ctx.beginPath();
+    ctx.moveTo(player.x - cameraX, player.y);
+    ctx.lineTo(player.anchorX - cameraX, player.anchorY);
+    ctx.stroke();
 }
 
+function drawPlayer() {
+    ctx.save();
+    ctx.translate(player.x - cameraX, player.y);
+
+    ctx.fillStyle = "red";
+    ctx.beginPath();
+    ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "blue";
+    ctx.fillRect(-14, 10, 28, 24);
+
+    ctx.fillStyle = "white";
+
+    ctx.beginPath();
+    ctx.arc(-6, -5, 4, 0, Math.PI * 2);
+    ctx.arc(6, -5, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function gameLoop() {
+    update();
+    drawBackground();
+    drawBuildings();
+    drawWeb();
+    drawPlayer();
+
+    requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
 </script>
+</body>
+</html>
+```
 
-</body>
-</html>
-</body>
-</html>
+## Features
+
+* High graphics neon city
+* Animated stars
+* Fog and glow effects
+* Detailed skyscrapers
+* Smooth swinging physics
+* Endless city
+* Moving camera
+* Score system
+* Keyboard controls
+* Works on GitHub Pages
+* Single HTML file
+
+---
+
+# High Graphics Upgrade
+
+Replace the entire `<script>` section with this upgraded version:
+
+```html
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+canvas.width = innerWidth;
+canvas.height = innerHeight;
+
+window.addEventListener("resize", () => {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+});
+
+const gravity = 0.45;
+const buildings = [];
+const stars = [];
+
+let cameraX = 0;
+let score = 0;
+
+const scoreEl = document.getElementById("score");
+
+for (let i = 0; i < 300; i++) {
+    stars.push({
+        x: Math.random() * 12000,
+        y: Math.random() * canvas.height,
+        size: Math.random() * 3,
+        alpha: Math.random()
+    });
+}
+
+for (let i = 0; i < 100; i++) {
+    const width = 150 + Math.random() * 120;
+    const height = 250 + Math.random() * 500;
+
+    buildings.push({
+        x: i * 240,
+        y: canvas.height - height,
+        width,
+        height,
+        glow: Math.random() * 40
+    });
+}
+
+const player = {
+    x: 300,
+    y: 250,
+    radius: 18,
+    vx: 0,
+    vy: 0,
+    speed: 0.55,
+    webActive: false,
+    anchorX: 0,
+    anchorY: 0,
+    ropeLength: 0
+};
+
+const keys = {};
+
+window.addEventListener("keydown", e => {
+    keys[e.key.toLowerCase()] = true;
+
+    if (e.code === "Space" && !player.webActive) {
+        shootWeb();
+    }
+});
+
+window.addEventListener("keyup", e => {
+    keys[e.key.toLowerCase()] = false;
+
+    if (e.code === "Space") {
+        player.webActive = false;
+    }
+});
+
+function shootWeb() {
+    let best = null;
+    let bestDist = Infinity;
+
+    for (const b of buildings) {
+        const tx = b.x + b.width / 2;
+        const ty = b.y;
+
+        const dx = tx - player.x;
+        const dy = ty - player.y;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist < bestDist && ty < player.y) {
+            bestDist = dist;
+            best = { x: tx, y: ty };
+        }
+    }
+
+    if (best) {
+        player.webActive = true;
+        player.anchorX = best.x;
+        player.anchorY = best.y;
+        player.ropeLength = Math.hypot(player.x - best.x, player.y - best.y);
+    }
+}
+
+function update() {
+    if (keys["a"]) player.vx -= player.speed;
+    if (keys["d"]) player.vx += player.speed;
+
+    player.vy += gravity;
+
+    player.x += player.vx;
+    player.y += player.vy;
+
+    player.vx *= 0.992;
+    player.vy *= 0.997;
+
+    if (player.webActive) {
+        const dx = player.x - player.anchorX;
+        const dy = player.y - player.anchorY;
+        const dist = Math.hypot(dx, dy);
+
+        if (dist > player.ropeLength) {
+            const angle = Math.atan2(dy, dx);
+
+            player.x = player.anchorX + Math.cos(angle) * player.ropeLength;
+            player.y = player.anchorY + Math.sin(angle) * player.ropeLength;
+
+            player.vx -= Math.cos(angle) * 0.45;
+            player.vy -= Math.sin(angle) * 0.45;
+        }
+    }
+
+    if (player.y > canvas.height + 300) {
+        player.x = 300;
+        player.y = 250;
+        player.vx = 0;
+        player.vy = 0;
+        score = 0;
+    }
+
+    cameraX = player.x - 300;
+
+    score = Math.floor(player.x / 10);
+    scoreEl.textContent = score;
+}
+
+function drawSky() {
+    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    g.addColorStop(0, "#060816");
+    g.addColorStop(1, "#0d1328");
+
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    for (const s of stars) {
+        ctx.globalAlpha = s.alpha;
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc((s.x - cameraX * 0.15) % 12000, s.y, s.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.globalAlpha = 1;
+}
+
+function drawBuildings() {
+    for (const b of buildings) {
+        const x = b.x - cameraX;
+
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = "cyan";
+
+        const g = ctx.createLinearGradient(0, b.y, 0, canvas.height);
+        g.addColorStop(0, "#202942");
+        g.addColorStop(1, "#0b1020");
+
+        ctx.fillStyle = g;
+        ctx.fillRect(x, b.y, b.width, b.height);
+
+        ctx.shadowBlur = 0;
+
+        for (let wy = b.y + 20; wy < b.y + b.height - 20; wy += 30) {
+            for (let wx = x + 15; wx < x + b.width - 15; wx += 24) {
+                ctx.fillStyle = Math.random() > 0.5 ? "#00e5ff" : "#ffe066";
+                ctx.fillRect(wx, wy, 10, 16);
+            }
+        }
+    }
+}
+
+function drawWeb() {
+    if (!player.webActive) return;
+
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = "white";
+
+    ctx.beginPath();
+    ctx.moveTo(player.x - cameraX, player.y);
+    ctx.lineTo(player.anchorX - cameraX, player.anchorY);
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+}
+
+function drawPlayer() {
+    const px = player.x - cameraX;
+
+    ctx.save();
+    ctx.translate(px, player.y);
+
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = "red";
+
+    ctx.fillStyle = "#ff2020";
+    ctx.beginPath();
+    ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = "#1565ff";
+    ctx.fillRect(-14, 10, 28, 24);
+
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(-6, -5, 4, 0, Math.PI * 2);
+    ctx.arc(6, -5, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+}
+
+function drawFog() {
+    const fog = ctx.createLinearGradient(0, canvas.height - 200, 0, canvas.height);
+    fog.addColorStop(0, "rgba(0,0,0,0)");
+    fog.addColorStop(1, "rgba(0,0,0,0.5)");
+
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, canvas.height - 200, canvas.width, 200);
+}
+
+function loop() {
+    update();
+    drawSky();
+    drawBuildings();
+    drawWeb();
+    drawPlayer();
+    drawFog();
+
+    requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+```
