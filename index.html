@@ -1,612 +1,299 @@
-# Spider‑Man Swinging Game (Single HTML File)
-
-Save this as `index.html` and open it in your browser or upload it to GitHub Pages.
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Spider Swing</title>
+<title>Spider Hero FP</title>
 <style>
 body {
-    margin: 0;
-    overflow: hidden;
-    background: linear-gradient(#1b1f3a, #0a0d1f);
-    font-family: Arial, sans-serif;
-}
-
-canvas {
-    display: block;
+  margin: 0;
+  overflow: hidden;
+  background: black;
+  font-family: Arial, sans-serif;
 }
 
 #ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: white;
-    z-index: 10;
-    font-size: 20px;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  color: white;
+  z-index: 100;
+  background: rgba(0,0,0,0.55);
+  padding: 14px;
+  border-radius: 14px;
+  max-width: 260px;
 }
 
-#instructions {
-    position: absolute;
-    bottom: 10px;
-    left: 10px;
-    color: white;
-    z-index: 10;
-    font-size: 16px;
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 30px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+#loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 28px;
+  background: black;
+  z-index: 200;
+}
+
+canvas {
+  display: block;
 }
 </style>
 </head>
 <body>
-<div id="ui">Distance: <span id="score">0</span></div>
-<div id="instructions">
-SPACE = Shoot Web | Release SPACE = Swing<br>
-A/D = Move Left/Right
+
+<div id="loading">Loading Spider Hero...</div>
+
+<div id="ui">
+  <h2>🕷 Spider Hero</h2>
+  <div>Click anywhere to start</div>
+  <br>
+  <b>Controls</b><br>
+  WASD = Move<br>
+  Mouse = Look Around<br>
+  SPACE = Jump<br>
+  SHIFT = Sprint<br>
+  Hold Left Click = Web Swing
 </div>
 
-<canvas id="game"></canvas>
+<div id="crosshair">+</div>
 
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
+<script type="module">
+// FIXED IMPORTS
+import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
+import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js?module';
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+const loading = document.getElementById('loading');
 
-window.addEventListener("resize", () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-});
+// SCENE
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87ceeb);
+scene.fog = new THREE.Fog(0x87ceeb, 50, 900);
 
-const gravity = 0.5;
-const buildings = [];
-const scoreEl = document.getElementById("score");
+// CAMERA
+const camera = new THREE.PerspectiveCamera(
+  75,
+  window.innerWidth / window.innerHeight,
+  0.1,
+  3000
+);
 
-let cameraX = 0;
-let score = 0;
+camera.position.set(0, 10, 0);
 
-for (let i = 0; i < 50; i++) {
-    const width = 120 + Math.random() * 100;
-    const height = 200 + Math.random() * 300;
+// RENDERER
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
 
-    buildings.push({
-        x: i * 250,
-        y: canvas.height - height,
-        width,
-        height
-    });
+// LIGHTS
+const sunlight = new THREE.DirectionalLight(0xffffff, 2);
+sunlight.position.set(150, 250, 100);
+sunlight.castShadow = true;
+scene.add(sunlight);
+
+const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambient);
+
+// GROUND
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(5000, 5000),
+  new THREE.MeshPhongMaterial({ color: 0x2e2e2e })
+);
+
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ROADS
+const roadMaterial = new THREE.MeshPhongMaterial({ color: 0x111111 });
+
+for(let i = -2000; i <= 2000; i += 200) {
+  const road1 = new THREE.Mesh(
+    new THREE.BoxGeometry(40, 0.1, 5000),
+    roadMaterial
+  );
+
+  road1.position.set(i, 0.05, 0);
+  scene.add(road1);
+
+  const road2 = new THREE.Mesh(
+    new THREE.BoxGeometry(5000, 0.1, 40),
+    roadMaterial
+  );
+
+  road2.position.set(0, 0.05, i);
+  scene.add(road2);
 }
 
-const player = {
-    x: 200,
-    y: 300,
-    radius: 18,
-    vx: 0,
-    vy: 0,
-    speed: 0.5,
-    webActive: false,
-    anchorX: 0,
-    anchorY: 0,
-    ropeLength: 0
-};
+// BUILDINGS
+for(let i = 0; i < 450; i++) {
+  const width = 20 + Math.random() * 40;
+  const height = 50 + Math.random() * 250;
+  const depth = 20 + Math.random() * 40;
 
+  const building = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, depth),
+    new THREE.MeshPhongMaterial({
+      color: new THREE.Color(
+        0.2 + Math.random() * 0.4,
+        0.2 + Math.random() * 0.4,
+        0.2 + Math.random() * 0.4
+      )
+    })
+  );
+
+  building.position.set(
+    (Math.random() - 0.5) * 4000,
+    height / 2,
+    (Math.random() - 0.5) * 4000
+  );
+
+  building.castShadow = true;
+  building.receiveShadow = true;
+
+  scene.add(building);
+}
+
+// CONTROLS
+const controls = new PointerLockControls(camera, document.body);
+scene.add(controls.getObject());
+
+window.addEventListener('click', () => {
+  controls.lock();
+});
+
+controls.addEventListener('lock', () => {
+  loading.style.display = 'none';
+});
+
+// INPUT
 const keys = {};
 
-window.addEventListener("keydown", e => {
-    keys[e.key.toLowerCase()] = true;
-
-    if (e.code === "Space" && !player.webActive) {
-        shootWeb();
-    }
+window.addEventListener('keydown', (e) => {
+  keys[e.code] = true;
 });
 
-window.addEventListener("keyup", e => {
-    keys[e.key.toLowerCase()] = false;
-
-    if (e.code === "Space") {
-        player.webActive = false;
-    }
+window.addEventListener('keyup', (e) => {
+  keys[e.code] = false;
 });
 
-function shootWeb() {
-    let nearest = null;
-    let bestDist = Infinity;
+// PLAYER PHYSICS
+let velocityY = 0;
+let onGround = false;
 
-    for (const b of buildings) {
-        const topX = b.x + b.width / 2;
-        const topY = b.y;
+// WEB SWING
+let swinging = false;
+let swingPoint = new THREE.Vector3();
 
-        const dx = topX - player.x;
-        const dy = topY - player.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
+const webMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+const webGeometry = new THREE.BufferGeometry().setFromPoints([
+  new THREE.Vector3(),
+  new THREE.Vector3()
+]);
 
-        if (dist < bestDist && topY < player.y) {
-            bestDist = dist;
-            nearest = { x: topX, y: topY };
-        }
-    }
+const webLine = new THREE.Line(webGeometry, webMaterial);
+webLine.visible = false;
+scene.add(webLine);
 
-    if (nearest) {
-        player.webActive = true;
-        player.anchorX = nearest.x;
-        player.anchorY = nearest.y;
+window.addEventListener('mousedown', () => {
+  swinging = true;
 
-        const dx = player.x - nearest.x;
-        const dy = player.y - nearest.y;
+  const direction = new THREE.Vector3();
+  camera.getWorldDirection(direction);
 
-        player.ropeLength = Math.sqrt(dx * dx + dy * dy);
-    }
+  swingPoint.copy(camera.position)
+    .add(direction.multiplyScalar(120));
+
+  swingPoint.y += 70;
+
+  webLine.visible = true;
+});
+
+window.addEventListener('mouseup', () => {
+  swinging = false;
+  webLine.visible = false;
+});
+
+// MOVEMENT
+function updateMovement() {
+  const moveSpeed = keys['ShiftLeft'] ? 1.8 : 1.0;
+
+  if(keys['KeyW']) controls.moveForward(moveSpeed);
+  if(keys['KeyS']) controls.moveForward(-moveSpeed);
+  if(keys['KeyA']) controls.moveRight(-moveSpeed);
+  if(keys['KeyD']) controls.moveRight(moveSpeed);
+
+  // GRAVITY
+  velocityY -= 0.02;
+  camera.position.y += velocityY;
+
+  // FLOOR COLLISION
+  if(camera.position.y <= 10) {
+    camera.position.y = 10;
+    velocityY = 0;
+    onGround = true;
+  }
+
+  // JUMP
+  if(keys['Space'] && onGround) {
+    velocityY = 0.45;
+    onGround = false;
+  }
+
+  // SWINGING
+  if(swinging) {
+    const pullDirection = new THREE.Vector3()
+      .subVectors(swingPoint, camera.position)
+      .normalize();
+
+    camera.position.add(pullDirection.multiplyScalar(2.4));
+
+    webGeometry.setFromPoints([
+      camera.position.clone(),
+      swingPoint.clone()
+    ]);
+  }
 }
 
-function update() {
-    if (keys["a"]) player.vx -= player.speed;
-    if (keys["d"]) player.vx += player.speed;
+// ANIMATION
+function animate() {
+  requestAnimationFrame(animate);
 
-    player.vy += gravity;
+  updateMovement();
 
-    player.x += player.vx;
-    player.y += player.vy;
-
-    player.vx *= 0.99;
-    player.vy *= 0.995;
-
-    if (player.webActive) {
-        const dx = player.x - player.anchorX;
-        const dy = player.y - player.anchorY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        if (dist > player.ropeLength) {
-            const angle = Math.atan2(dy, dx);
-
-            player.x = player.anchorX + Math.cos(angle) * player.ropeLength;
-            player.y = player.anchorY + Math.sin(angle) * player.ropeLength;
-
-            const pull = 0.5;
-            player.vx -= Math.cos(angle) * pull;
-            player.vy -= Math.sin(angle) * pull;
-        }
-    }
-
-    const ground = canvas.height + 200;
-
-    if (player.y > ground) {
-        player.x = 200;
-        player.y = 300;
-        player.vx = 0;
-        player.vy = 0;
-        score = 0;
-    }
-
-    cameraX = player.x - 200;
-    score = Math.floor(player.x / 10);
-    scoreEl.textContent = score;
+  renderer.render(scene, camera);
 }
 
-function drawBackground() {
-    ctx.fillStyle = "#0a0d1f";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+animate();
 
-    for (let i = 0; i < 200; i++) {
-        ctx.fillStyle = "white";
-        ctx.fillRect((i * 97 - cameraX * 0.2) % 3000, (i * 53) % canvas.height, 2, 2);
-    }
-}
+// RESIZE
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
 
-function drawBuildings() {
-    for (const b of buildings) {
-        const bx = b.x - cameraX;
+// BASIC SELF TESTS
+console.assert(scene instanceof THREE.Scene, 'Scene failed to create');
+console.assert(camera instanceof THREE.PerspectiveCamera, 'Camera failed');
+console.assert(renderer instanceof THREE.WebGLRenderer, 'Renderer failed');
+console.assert(controls instanceof PointerLockControls, 'Controls failed');
 
-        ctx.fillStyle = "#1f2937";
-        ctx.fillRect(bx, b.y, b.width, b.height);
-
-        ctx.fillStyle = "#ffd966";
-
-        for (let y = b.y + 20; y < b.y + b.height - 20; y += 30) {
-            for (let x = bx + 15; x < bx + b.width - 15; x += 25) {
-                ctx.fillRect(x, y, 10, 15);
-            }
-        }
-    }
-}
-
-function drawWeb() {
-    if (!player.webActive) return;
-
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-
-    ctx.beginPath();
-    ctx.moveTo(player.x - cameraX, player.y);
-    ctx.lineTo(player.anchorX - cameraX, player.anchorY);
-    ctx.stroke();
-}
-
-function drawPlayer() {
-    ctx.save();
-    ctx.translate(player.x - cameraX, player.y);
-
-    ctx.fillStyle = "red";
-    ctx.beginPath();
-    ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "blue";
-    ctx.fillRect(-14, 10, 28, 24);
-
-    ctx.fillStyle = "white";
-
-    ctx.beginPath();
-    ctx.arc(-6, -5, 4, 0, Math.PI * 2);
-    ctx.arc(6, -5, 4, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-}
-
-function gameLoop() {
-    update();
-    drawBackground();
-    drawBuildings();
-    drawWeb();
-    drawPlayer();
-
-    requestAnimationFrame(gameLoop);
-}
-
-gameLoop();
+console.log('Spider Hero loaded successfully');
 </script>
+
 </body>
 </html>
-```
-
-## Features
-
-* High graphics neon city
-* Animated stars
-* Fog and glow effects
-* Detailed skyscrapers
-* Smooth swinging physics
-* Endless city
-* Moving camera
-* Score system
-* Keyboard controls
-* Works on GitHub Pages
-* Single HTML file
-
----
-
-# Ultimate Third‑Person Swing Upgrade
-
-Replace ONLY the `<script>` section with this cinematic third‑person swinging version:
-
-```html
-<script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-
-canvas.width = innerWidth;
-canvas.height = innerHeight;
-
-window.addEventListener("resize", () => {
-    canvas.width = innerWidth;
-    canvas.height = innerHeight;
-});
-
-const gravity = 0.45;
-const buildings = [];
-const stars = [];
-
-let cameraX = 0;
-let score = 0;
-
-const scoreEl = document.getElementById("score");
-
-for (let i = 0; i < 400; i++) {
-    stars.push({
-        x: Math.random() * 30000,
-        y: Math.random() * canvas.height,
-        size: Math.random() * 2,
-        alpha: Math.random()
-    });
-}
-
-for (let i = 0; i < 140; i++) {
-    const width = 150 + Math.random() * 150;
-    const height = 250 + Math.random() * 700;
-
-    buildings.push({
-        x: i * 260,
-        y: canvas.height - height,
-        width,
-        height
-    });
-}
-
-const player = {
-    x: 300,
-    y: 200,
-    vx: 0,
-    vy: 0,
-    radius: 18,
-    speed: 0.6,
-    web: false,
-    anchorX: 0,
-    anchorY: 0,
-    ropeLength: 0,
-    angle: 0
-};
-
-const keys = {};
-
-window.addEventListener("keydown", e => {
-    keys[e.key.toLowerCase()] = true;
-
-    if (e.code === "Space" && !player.web) {
-        shootWeb();
-    }
-});
-
-window.addEventListener("keyup", e => {
-    keys[e.key.toLowerCase()] = false;
-
-    if (e.code === "Space") {
-        player.web = false;
-    }
-});
-
-function shootWeb() {
-    let best = null;
-    let bestDist = Infinity;
-
-    for (const b of buildings) {
-        const tx = b.x + b.width / 2;
-        const ty = b.y;
-
-        const dx = tx - player.x;
-        const dy = ty - player.y;
-        const dist = Math.hypot(dx, dy);
-
-        if (dist < bestDist && ty < player.y) {
-            bestDist = dist;
-            best = { x: tx, y: ty };
-        }
-    }
-
-    if (best) {
-        player.web = true;
-        player.anchorX = best.x;
-        player.anchorY = best.y;
-        player.ropeLength = Math.hypot(player.x - best.x, player.y - best.y);
-    }
-}
-
-function update() {
-    if (keys["a"]) player.vx -= player.speed;
-    if (keys["d"]) player.vx += player.speed;
-
-    player.vy += gravity;
-
-    player.x += player.vx;
-    player.y += player.vy;
-
-    player.vx *= 0.995;
-    player.vy *= 0.998;
-
-    if (player.web) {
-        const dx = player.x - player.anchorX;
-        const dy = player.y - player.anchorY;
-
-        const dist = Math.hypot(dx, dy);
-
-        if (dist > player.ropeLength) {
-            const angle = Math.atan2(dy, dx);
-
-            player.x = player.anchorX + Math.cos(angle) * player.ropeLength;
-            player.y = player.anchorY + Math.sin(angle) * player.ropeLength;
-
-            const swingForce = 0.75;
-
-            player.vx -= Math.cos(angle) * swingForce;
-            player.vy -= Math.sin(angle) * swingForce;
-
-            if (keys["d"]) {
-                player.vx += 0.35;
-            }
-
-            if (keys["a"]) {
-                player.vx -= 0.35;
-            }
-        }
-    }
-
-    player.angle = player.vx * 0.03;
-
-    if (player.y > canvas.height + 500) {
-        player.x = 300;
-        player.y = 200;
-        player.vx = 0;
-        player.vy = 0;
-        score = 0;
-    }
-
-    const targetCamera = player.x - canvas.width * 0.35;
-    cameraX += (targetCamera - cameraX) * 0.08;
-
-    score = Math.floor(player.x / 10);
-    scoreEl.textContent = score;
-}
-
-function drawSky() {
-    const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    g.addColorStop(0, "#050816");
-    g.addColorStop(1, "#101935");
-
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    for (const s of stars) {
-        ctx.globalAlpha = s.alpha;
-        ctx.fillStyle = "white";
-
-        ctx.beginPath();
-        ctx.arc((s.x - cameraX * 0.1) % 30000, s.y, s.size, 0, Math.PI * 2);
-        ctx.fill();
-    }
-
-    ctx.globalAlpha = 1;
-}
-
-function drawBuildings() {
-    for (const b of buildings) {
-        const x = b.x - cameraX;
-
-        const depth = 1 - Math.min(Math.abs(x - canvas.width/2) / canvas.width, 0.5);
-
-        ctx.save();
-
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = "cyan";
-
-        const g = ctx.createLinearGradient(0, b.y, 0, canvas.height);
-        g.addColorStop(0, "#263859");
-        g.addColorStop(1, "#09101f");
-
-        ctx.fillStyle = g;
-
-        ctx.fillRect(
-            x,
-            b.y,
-            b.width * depth,
-            b.height
-        );
-
-        ctx.shadowBlur = 0;
-
-        for (let wy = b.y + 20; wy < b.y + b.height - 20; wy += 30) {
-            for (let wx = x + 15; wx < x + b.width * depth - 15; wx += 24) {
-                ctx.fillStyle = Math.random() > 0.5 ? "#00d9ff" : "#ffe066";
-                ctx.fillRect(wx, wy, 10, 16);
-            }
-        }
-
-        ctx.restore();
-    }
-}
-
-function drawWeb() {
-    if (!player.web) return;
-
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 2;
-    ctx.shadowBlur = 15;
-    ctx.shadowColor = "white";
-
-    ctx.beginPath();
-    ctx.moveTo(player.x - cameraX, player.y);
-    ctx.lineTo(player.anchorX - cameraX, player.anchorY);
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
-}
-
-function drawPlayer() {
-    const px = player.x - cameraX;
-
-    ctx.save();
-
-    ctx.translate(px, player.y);
-    ctx.rotate(player.angle);
-
-    ctx.scale(1.2, 1.2);
-
-    ctx.shadowBlur = 25;
-    ctx.shadowColor = "red";
-
-    ctx.fillStyle = "#ff1f1f";
-
-    ctx.beginPath();
-    ctx.arc(0, -12, 16, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = "#1565ff";
-
-    ctx.fillRect(-12, 5, 24, 40);
-
-    ctx.strokeStyle = "#ff1f1f";
-    ctx.lineWidth = 6;
-
-    ctx.beginPath();
-    ctx.moveTo(-8, 10);
-    ctx.lineTo(-18, 35);
-    ctx.moveTo(8, 10);
-    ctx.lineTo(18, 35);
-    ctx.moveTo(-8, 45);
-    ctx.lineTo(-12, 70);
-    ctx.moveTo(8, 45);
-    ctx.lineTo(12, 70);
-    ctx.stroke();
-
-    ctx.fillStyle = "white";
-
-    ctx.beginPath();
-    ctx.arc(-5, -15, 3, 0, Math.PI * 2);
-    ctx.arc(5, -15, 3, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.restore();
-}
-
-function cinematicEffects() {
-    const vignette = ctx.createRadialGradient(
-        canvas.width / 2,
-        canvas.height / 2,
-        200,
-        canvas.width / 2,
-        canvas.height / 2,
-        canvas.width
-    );
-
-    vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,0,0,0.45)");
-
-    ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (Math.abs(player.vx) > 15) {
-        ctx.fillStyle = "rgba(255,255,255,0.04)";
-
-        for (let i = 0; i < 25; i++) {
-            ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 120, 2);
-        }
-    }
-}
-
-function loop() {
-    update();
-    drawSky();
-    drawBuildings();
-    drawWeb();
-    drawPlayer();
-    cinematicEffects();
-
-    requestAnimationFrame(loop);
-}
-
-loop();
-</script>
-```
-
-## New Features
-
-* Third‑person cinematic camera
-* Better swinging momentum
-* Dynamic swinging physics
-* Bigger detailed Spider‑Man model
-* Camera smoothing
-* Speed effects
-* Vignette lighting
-* Massive neon city
-* High‑speed traversal feeling
