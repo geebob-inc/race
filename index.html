@@ -138,7 +138,9 @@ for(let i = -2000; i <= 2000; i += 200) {
   scene.add(road2);
 }
 
-// BUILDINGS
+// BUILDINGS + COLLISION OBJECTS
+const collidableBuildings = [];
+
 for(let i = 0; i < 450; i++) {
   const width = 20 + Math.random() * 40;
   const height = 50 + Math.random() * 250;
@@ -164,9 +166,11 @@ for(let i = 0; i < 450; i++) {
   building.castShadow = true;
   building.receiveShadow = true;
 
+  building.userData.boundingBox = new THREE.Box3().setFromObject(building);
+
+  collidableBuildings.push(building);
   scene.add(building);
 }
-
 // CONTROLS
 const controls = new PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
@@ -193,6 +197,10 @@ window.addEventListener('keyup', (e) => {
 // PLAYER PHYSICS
 let velocityY = 0;
 let onGround = false;
+let wallClimbing = false;
+
+const playerBox = new THREE.Box3();
+const playerSize = new THREE.Vector3(4, 12, 4);
 
 // WEB SWING
 let swinging = false;
@@ -228,16 +236,53 @@ window.addEventListener('mouseup', () => {
 });
 
 // MOVEMENT
+function checkBuildingCollision(position) {
+  playerBox.setFromCenterAndSize(
+    new THREE.Vector3(position.x, position.y + 6, position.z),
+    playerSize
+  );
+
+  for(const building of collidableBuildings) {
+    building.userData.boundingBox.setFromObject(building);
+
+    if(playerBox.intersectsBox(building.userData.boundingBox)) {
+      return building;
+    }
+  }
+
+  return null;
+}
+
 function updateMovement() {
   const moveSpeed = keys['ShiftLeft'] ? 1.8 : 1.0;
+
+  const oldPosition = camera.position.clone();
 
   if(keys['KeyW']) controls.moveForward(moveSpeed);
   if(keys['KeyS']) controls.moveForward(-moveSpeed);
   if(keys['KeyA']) controls.moveRight(-moveSpeed);
   if(keys['KeyD']) controls.moveRight(moveSpeed);
 
+  // COLLISION
+  const collidedBuilding = checkBuildingCollision(camera.position);
+
+  if(collidedBuilding) {
+    // WALL CLIMB MODE
+    if(keys['KeyW']) {
+      wallClimbing = true;
+      velocityY = 0.15;
+    } else {
+      camera.position.copy(oldPosition);
+    }
+  } else {
+    wallClimbing = false;
+  }
+
   // GRAVITY
-  velocityY -= 0.02;
+  if(!wallClimbing) {
+    velocityY -= 0.02;
+  }
+
   camera.position.y += velocityY;
 
   // FLOOR COLLISION
@@ -245,6 +290,7 @@ function updateMovement() {
     camera.position.y = 10;
     velocityY = 0;
     onGround = true;
+    wallClimbing = false;
   }
 
   // JUMP
@@ -253,7 +299,7 @@ function updateMovement() {
     onGround = false;
   }
 
-  // SWINGING
+  // WEB SWINGING
   if(swinging) {
     const pullDirection = new THREE.Vector3()
       .subVectors(swingPoint, camera.position)
@@ -261,11 +307,38 @@ function updateMovement() {
 
     camera.position.add(pullDirection.multiplyScalar(2.4));
 
+    const swingCollision = checkBuildingCollision(camera.position);
+
+    if(swingCollision && !wallClimbing) {
+      camera.position.copy(oldPosition);
+    }
+
     webGeometry.setFromPoints([
       camera.position.clone(),
       swingPoint.clone()
     ]);
   }
+}
+
+// WALL WEB VISUALS
+for(const building of collidableBuildings.slice(0, 100)) {
+  const webPattern = new THREE.Mesh(
+    new THREE.PlaneGeometry(8, 8),
+    new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide
+    })
+  );
+
+  webPattern.position.set(
+    building.position.x,
+    building.position.y,
+    building.position.z + (building.geometry.parameters.depth / 2) + 0.2
+  );
+
+  scene.add(webPattern);
 }
 
 // ANIMATION
