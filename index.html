@@ -8,7 +8,7 @@ Save this as `index.html` and open it in your browser or upload it to GitHub Pag
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Spider-man Swing</title>
+<title>Spider Swing</title>
 <style>
 body {
     margin: 0;
@@ -278,9 +278,9 @@ gameLoop();
 
 ---
 
-# High Graphics Upgrade
+# Ultimate Third‑Person Swing Upgrade
 
-Replace the entire `<script>` section with this upgraded version:
+Replace ONLY the `<script>` section with this cinematic third‑person swinging version:
 
 ```html
 <script>
@@ -304,39 +304,39 @@ let score = 0;
 
 const scoreEl = document.getElementById("score");
 
-for (let i = 0; i < 300; i++) {
+for (let i = 0; i < 400; i++) {
     stars.push({
-        x: Math.random() * 12000,
+        x: Math.random() * 30000,
         y: Math.random() * canvas.height,
-        size: Math.random() * 3,
+        size: Math.random() * 2,
         alpha: Math.random()
     });
 }
 
-for (let i = 0; i < 100; i++) {
-    const width = 150 + Math.random() * 120;
-    const height = 250 + Math.random() * 500;
+for (let i = 0; i < 140; i++) {
+    const width = 150 + Math.random() * 150;
+    const height = 250 + Math.random() * 700;
 
     buildings.push({
-        x: i * 240,
+        x: i * 260,
         y: canvas.height - height,
         width,
-        height,
-        glow: Math.random() * 40
+        height
     });
 }
 
 const player = {
     x: 300,
-    y: 250,
-    radius: 18,
+    y: 200,
     vx: 0,
     vy: 0,
-    speed: 0.55,
-    webActive: false,
+    radius: 18,
+    speed: 0.6,
+    web: false,
     anchorX: 0,
     anchorY: 0,
-    ropeLength: 0
+    ropeLength: 0,
+    angle: 0
 };
 
 const keys = {};
@@ -344,7 +344,7 @@ const keys = {};
 window.addEventListener("keydown", e => {
     keys[e.key.toLowerCase()] = true;
 
-    if (e.code === "Space" && !player.webActive) {
+    if (e.code === "Space" && !player.web) {
         shootWeb();
     }
 });
@@ -353,7 +353,7 @@ window.addEventListener("keyup", e => {
     keys[e.key.toLowerCase()] = false;
 
     if (e.code === "Space") {
-        player.webActive = false;
+        player.web = false;
     }
 });
 
@@ -376,7 +376,7 @@ function shootWeb() {
     }
 
     if (best) {
-        player.webActive = true;
+        player.web = true;
         player.anchorX = best.x;
         player.anchorY = best.y;
         player.ropeLength = Math.hypot(player.x - best.x, player.y - best.y);
@@ -392,12 +392,13 @@ function update() {
     player.x += player.vx;
     player.y += player.vy;
 
-    player.vx *= 0.992;
-    player.vy *= 0.997;
+    player.vx *= 0.995;
+    player.vy *= 0.998;
 
-    if (player.webActive) {
+    if (player.web) {
         const dx = player.x - player.anchorX;
         const dy = player.y - player.anchorY;
+
         const dist = Math.hypot(dx, dy);
 
         if (dist > player.ropeLength) {
@@ -406,20 +407,33 @@ function update() {
             player.x = player.anchorX + Math.cos(angle) * player.ropeLength;
             player.y = player.anchorY + Math.sin(angle) * player.ropeLength;
 
-            player.vx -= Math.cos(angle) * 0.45;
-            player.vy -= Math.sin(angle) * 0.45;
+            const swingForce = 0.75;
+
+            player.vx -= Math.cos(angle) * swingForce;
+            player.vy -= Math.sin(angle) * swingForce;
+
+            if (keys["d"]) {
+                player.vx += 0.35;
+            }
+
+            if (keys["a"]) {
+                player.vx -= 0.35;
+            }
         }
     }
 
-    if (player.y > canvas.height + 300) {
+    player.angle = player.vx * 0.03;
+
+    if (player.y > canvas.height + 500) {
         player.x = 300;
-        player.y = 250;
+        player.y = 200;
         player.vx = 0;
         player.vy = 0;
         score = 0;
     }
 
-    cameraX = player.x - 300;
+    const targetCamera = player.x - canvas.width * 0.35;
+    cameraX += (targetCamera - cameraX) * 0.08;
 
     score = Math.floor(player.x / 10);
     scoreEl.textContent = score;
@@ -427,8 +441,8 @@ function update() {
 
 function drawSky() {
     const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    g.addColorStop(0, "#060816");
-    g.addColorStop(1, "#0d1328");
+    g.addColorStop(0, "#050816");
+    g.addColorStop(1, "#101935");
 
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -436,8 +450,9 @@ function drawSky() {
     for (const s of stars) {
         ctx.globalAlpha = s.alpha;
         ctx.fillStyle = "white";
+
         ctx.beginPath();
-        ctx.arc((s.x - cameraX * 0.15) % 12000, s.y, s.size, 0, Math.PI * 2);
+        ctx.arc((s.x - cameraX * 0.1) % 30000, s.y, s.size, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -448,29 +463,41 @@ function drawBuildings() {
     for (const b of buildings) {
         const x = b.x - cameraX;
 
+        const depth = 1 - Math.min(Math.abs(x - canvas.width/2) / canvas.width, 0.5);
+
+        ctx.save();
+
         ctx.shadowBlur = 20;
         ctx.shadowColor = "cyan";
 
         const g = ctx.createLinearGradient(0, b.y, 0, canvas.height);
-        g.addColorStop(0, "#202942");
-        g.addColorStop(1, "#0b1020");
+        g.addColorStop(0, "#263859");
+        g.addColorStop(1, "#09101f");
 
         ctx.fillStyle = g;
-        ctx.fillRect(x, b.y, b.width, b.height);
+
+        ctx.fillRect(
+            x,
+            b.y,
+            b.width * depth,
+            b.height
+        );
 
         ctx.shadowBlur = 0;
 
         for (let wy = b.y + 20; wy < b.y + b.height - 20; wy += 30) {
-            for (let wx = x + 15; wx < x + b.width - 15; wx += 24) {
-                ctx.fillStyle = Math.random() > 0.5 ? "#00e5ff" : "#ffe066";
+            for (let wx = x + 15; wx < x + b.width * depth - 15; wx += 24) {
+                ctx.fillStyle = Math.random() > 0.5 ? "#00d9ff" : "#ffe066";
                 ctx.fillRect(wx, wy, 10, 16);
             }
         }
+
+        ctx.restore();
     }
 }
 
 function drawWeb() {
-    if (!player.webActive) return;
+    if (!player.web) return;
 
     ctx.strokeStyle = "white";
     ctx.lineWidth = 2;
@@ -489,35 +516,72 @@ function drawPlayer() {
     const px = player.x - cameraX;
 
     ctx.save();
+
     ctx.translate(px, player.y);
+    ctx.rotate(player.angle);
+
+    ctx.scale(1.2, 1.2);
 
     ctx.shadowBlur = 25;
     ctx.shadowColor = "red";
 
-    ctx.fillStyle = "#ff2020";
+    ctx.fillStyle = "#ff1f1f";
+
     ctx.beginPath();
-    ctx.arc(0, 0, player.radius, 0, Math.PI * 2);
+    ctx.arc(0, -12, 16, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.fillStyle = "#1565ff";
-    ctx.fillRect(-14, 10, 28, 24);
+
+    ctx.fillRect(-12, 5, 24, 40);
+
+    ctx.strokeStyle = "#ff1f1f";
+    ctx.lineWidth = 6;
+
+    ctx.beginPath();
+    ctx.moveTo(-8, 10);
+    ctx.lineTo(-18, 35);
+    ctx.moveTo(8, 10);
+    ctx.lineTo(18, 35);
+    ctx.moveTo(-8, 45);
+    ctx.lineTo(-12, 70);
+    ctx.moveTo(8, 45);
+    ctx.lineTo(12, 70);
+    ctx.stroke();
 
     ctx.fillStyle = "white";
+
     ctx.beginPath();
-    ctx.arc(-6, -5, 4, 0, Math.PI * 2);
-    ctx.arc(6, -5, 4, 0, Math.PI * 2);
+    ctx.arc(-5, -15, 3, 0, Math.PI * 2);
+    ctx.arc(5, -15, 3, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.restore();
 }
 
-function drawFog() {
-    const fog = ctx.createLinearGradient(0, canvas.height - 200, 0, canvas.height);
-    fog.addColorStop(0, "rgba(0,0,0,0)");
-    fog.addColorStop(1, "rgba(0,0,0,0.5)");
+function cinematicEffects() {
+    const vignette = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        200,
+        canvas.width / 2,
+        canvas.height / 2,
+        canvas.width
+    );
 
-    ctx.fillStyle = fog;
-    ctx.fillRect(0, canvas.height - 200, canvas.width, 200);
+    vignette.addColorStop(0, "rgba(0,0,0,0)");
+    vignette.addColorStop(1, "rgba(0,0,0,0.45)");
+
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (Math.abs(player.vx) > 15) {
+        ctx.fillStyle = "rgba(255,255,255,0.04)";
+
+        for (let i = 0; i < 25; i++) {
+            ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height, 120, 2);
+        }
+    }
 }
 
 function loop() {
@@ -526,7 +590,7 @@ function loop() {
     drawBuildings();
     drawWeb();
     drawPlayer();
-    drawFog();
+    cinematicEffects();
 
     requestAnimationFrame(loop);
 }
@@ -534,3 +598,15 @@ function loop() {
 loop();
 </script>
 ```
+
+## New Features
+
+* Third‑person cinematic camera
+* Better swinging momentum
+* Dynamic swinging physics
+* Bigger detailed Spider‑Man model
+* Camera smoothing
+* Speed effects
+* Vignette lighting
+* Massive neon city
+* High‑speed traversal feeling
