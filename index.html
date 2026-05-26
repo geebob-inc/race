@@ -58,14 +58,16 @@ canvas {
 
 <div id="ui">
   <h2>🕷 Spider Hero</h2>
-  <div>Click anywhere to start</div>
+  <div>Ultimate Spider Movement</div>
   <br>
   <b>Controls</b><br>
   WASD = Move<br>
   Mouse = Look Around<br>
-  SPACE = Jump<br>
+  SPACE = Jump / Wall Jump<br>
   SHIFT = Sprint<br>
-  Hold Left Click = Web Swing
+  Hold Left Click = Web Swing<br>
+  E = Zip To Building<br>
+  Q = Air Dash
 </div>
 
 <div id="crosshair">+</div>
@@ -198,6 +200,8 @@ window.addEventListener('keyup', (e) => {
 let velocityY = 0;
 let onGround = false;
 let wallClimbing = false;
+let wallRunning = false;
+let airDashCooldown = 0;
 
 const playerBox = new THREE.Box3();
 const playerSize = new THREE.Vector3(4, 12, 4);
@@ -206,13 +210,35 @@ const playerSize = new THREE.Vector3(4, 12, 4);
 let swinging = false;
 let swingPoint = new THREE.Vector3();
 
-const webMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+const webMaterial = new THREE.LineBasicMaterial({ 
+  color: 0xffffff,
+  transparent: true,
+  opacity: 0.95
+});
 const webGeometry = new THREE.BufferGeometry().setFromPoints([
   new THREE.Vector3(),
   new THREE.Vector3()
 ]);
 
 const webLine = new THREE.Line(webGeometry, webMaterial);
+
+// WEB SHOOTER HANDS
+const handGeometry = new THREE.SphereGeometry(0.25, 12, 12);
+const handMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+
+const leftHand = new THREE.Mesh(handGeometry, handMaterial);
+const rightHand = new THREE.Mesh(handGeometry, handMaterial);
+
+camera.add(leftHand);
+camera.add(rightHand);
+
+leftHand.position.set(-0.45, -0.45, -1);
+rightHand.position.set(0.45, -0.45, -1);
+
+scene.add(camera);
+
+// WEB PROJECTILES
+const activeWebs = [];
 webLine.visible = false;
 scene.add(webLine);
 
@@ -228,11 +254,46 @@ window.addEventListener('mousedown', () => {
   swingPoint.y += 70;
 
   webLine.visible = true;
+
+  // CREATE VISIBLE WEB SHOT
+  const webBall = new THREE.Mesh(
+    new THREE.SphereGeometry(0.3, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffffff })
+  );
+
+  webBall.position.copy(camera.position);
+  scene.add(webBall);
+
+  activeWebs.push({
+    mesh: webBall,
+    velocity: direction.clone().multiplyScalar(6),
+    life: 60
+  });
 });
 
 window.addEventListener('mouseup', () => {
   swinging = false;
   webLine.visible = false;
+});
+
+// ZIP ABILITY
+window.addEventListener('keydown', (e) => {
+  if(e.code === 'KeyE') {
+    const dir = new THREE.Vector3();
+    camera.getWorldDirection(dir);
+
+    camera.position.add(dir.multiplyScalar(30));
+    camera.position.y += 10;
+  }
+
+  // AIR DASH
+  if(e.code === 'KeyQ' && airDashCooldown <= 0) {
+    const dashDir = new THREE.Vector3();
+    camera.getWorldDirection(dashDir);
+
+    camera.position.add(dashDir.multiplyScalar(25));
+    airDashCooldown = 60;
+  }
 });
 
 // MOVEMENT
@@ -254,6 +315,7 @@ function checkBuildingCollision(position) {
 }
 
 function updateMovement() {
+  if(airDashCooldown > 0) airDashCooldown--;
   const moveSpeed = keys['ShiftLeft'] ? 1.8 : 1.0;
 
   const oldPosition = camera.position.clone();
@@ -267,15 +329,28 @@ function updateMovement() {
   const collidedBuilding = checkBuildingCollision(camera.position);
 
   if(collidedBuilding) {
-    // WALL CLIMB MODE
+    // WALL CLIMB
     if(keys['KeyW']) {
       wallClimbing = true;
-      velocityY = 0.15;
-    } else {
+      wallRunning = true;
+      velocityY = 0.22;
+    }
+
+    // WALL JUMP
+    if(keys['Space']) {
+      velocityY = 0.5;
+
+      const bounceDir = new THREE.Vector3();
+      camera.getWorldDirection(bounceDir);
+      camera.position.add(bounceDir.multiplyScalar(-10));
+    }
+
+    if(!wallClimbing) {
       camera.position.copy(oldPosition);
     }
   } else {
     wallClimbing = false;
+    wallRunning = false;
   }
 
   // GRAVITY
@@ -305,7 +380,11 @@ function updateMovement() {
       .subVectors(swingPoint, camera.position)
       .normalize();
 
-    camera.position.add(pullDirection.multiplyScalar(2.4));
+    // Spider-like swinging speed boost
+    camera.position.add(pullDirection.multiplyScalar(3.8));
+
+    // Swing momentum
+    camera.position.y += 0.08;
 
     const swingCollision = checkBuildingCollision(camera.position);
 
@@ -313,10 +392,22 @@ function updateMovement() {
       camera.position.copy(oldPosition);
     }
 
+    // MAKE WEB START FROM HAND
+    const handWorldPosition = new THREE.Vector3();
+    rightHand.getWorldPosition(handWorldPosition);
+
     webGeometry.setFromPoints([
-      camera.position.clone(),
+      handWorldPosition,
       swingPoint.clone()
     ]);
+
+    // CAMERA FOV SPEED EFFECT
+    camera.fov = 82;
+    camera.updateProjectionMatrix();
+  } else {
+    camera.fov += (75 - camera.fov) * 0.08;
+    camera.updateProjectionMatrix();
+  }
   }
 }
 
@@ -347,6 +438,30 @@ function animate() {
 
   updateMovement();
 
+  // UPDATE WEB PROJECTILES
+  for(let i = activeWebs.length - 1; i >= 0; i--) {
+    const web = activeWebs[i];
+
+    web.mesh.position.add(web.velocity);
+    web.life--;
+
+    // SPIN EFFECT
+    web.mesh.rotation.x += 0.2;
+    web.mesh.rotation.y += 0.2;
+
+    if(web.life <= 0) {
+      scene.remove(web.mesh);
+      activeWebs.splice(i, 1);
+    }
+  }
+
+  // HAND ANIMATION
+  leftHand.position.y = -0.45 + Math.sin(Date.now() * 0.01) * 0.03;
+  rightHand.position.y = -0.45 + Math.sin(Date.now() * 0.01) * 0.03;
+
+  // CAMERA SWAY EFFECT
+  camera.rotation.z = Math.sin(Date.now() * 0.002) * 0.002;
+
   renderer.render(scene, camera);
 }
 
@@ -365,7 +480,11 @@ console.assert(camera instanceof THREE.PerspectiveCamera, 'Camera failed');
 console.assert(renderer instanceof THREE.WebGLRenderer, 'Renderer failed');
 console.assert(controls instanceof PointerLockControls, 'Controls failed');
 
-console.log('Spider Hero loaded successfully');
+console.log('Spider Hero Ultimate loaded successfully');
+
+// EXTRA TESTS
+console.assert(collidableBuildings.length > 0, 'Buildings failed to generate');
+console.assert(typeof updateMovement === 'function', 'Movement missing');
 </script>
 
 </body>
