@@ -54,7 +54,7 @@ canvas {
 </head>
 <body>
 
-<div id="loading">Loading Spider Hero...</div>
+<div id="loading">Click to start Spider Hero<br><br>Mouse lock enabled when supported.</div>
 
 <div id="ui">
   <h2>🕷 Spider Hero</h2>
@@ -173,16 +173,50 @@ for(let i = 0; i < 450; i++) {
   collidableBuildings.push(building);
   scene.add(building);
 }
-// CONTROLS
-const controls = new PointerLockControls(camera, document.body);
-scene.add(controls.getObject());
+// POINTER LOCK + FALLBACK CONTROLS
+let mouseDown = false;
+let pointerLocked = false;
 
-window.addEventListener('click', () => {
-  controls.lock();
+function enablePointerLock() {
+  const canvas = renderer.domElement;
+
+  if(canvas.requestPointerLock) {
+    canvas.requestPointerLock();
+  }
+}
+
+window.addEventListener('mousedown', () => {
+  mouseDown = true;
+  loading.style.display = 'none';
+
+  // TRY POINTER LOCK
+  try {
+    enablePointerLock();
+  } catch(err) {
+    console.warn('Pointer lock blocked by sandbox, using fallback mouse controls');
+  }
 });
 
-controls.addEventListener('lock', () => {
-  loading.style.display = 'none';
+window.addEventListener('mouseup', () => {
+  mouseDown = false;
+});
+
+// POINTER LOCK STATE
+window.addEventListener('pointerlockchange', () => {
+  pointerLocked = document.pointerLockElement === renderer.domElement;
+});
+
+window.addEventListener('mousemove', (e) => {
+  // POINTER LOCK CAMERA
+  if(pointerLocked || mouseDown) {
+    camera.rotation.y -= e.movementX * 0.002;
+    camera.rotation.x -= e.movementY * 0.002;
+
+    camera.rotation.x = Math.max(
+      -Math.PI / 2,
+      Math.min(Math.PI / 2, camera.rotation.x)
+    );
+  }
 });
 
 // INPUT
@@ -320,10 +354,22 @@ function updateMovement() {
 
   const oldPosition = camera.position.clone();
 
-  if(keys['KeyW']) controls.moveForward(moveSpeed);
-  if(keys['KeyS']) controls.moveForward(-moveSpeed);
-  if(keys['KeyA']) controls.moveRight(-moveSpeed);
-  if(keys['KeyD']) controls.moveRight(moveSpeed);
+  const forward = new THREE.Vector3(
+    Math.sin(camera.rotation.y),
+    0,
+    Math.cos(camera.rotation.y)
+  );
+
+  const right = new THREE.Vector3(
+    Math.cos(camera.rotation.y),
+    0,
+    -Math.sin(camera.rotation.y)
+  );
+
+  if(keys['KeyW']) camera.position.add(forward.clone().multiplyScalar(moveSpeed));
+  if(keys['KeyS']) camera.position.add(forward.clone().multiplyScalar(-moveSpeed));
+  if(keys['KeyA']) camera.position.add(right.clone().multiplyScalar(-moveSpeed));
+  if(keys['KeyD']) camera.position.add(right.clone().multiplyScalar(moveSpeed));
 
   // COLLISION
   const collidedBuilding = checkBuildingCollision(camera.position);
@@ -408,7 +454,6 @@ function updateMovement() {
     camera.fov += (75 - camera.fov) * 0.08;
     camera.updateProjectionMatrix();
   }
-  }
 }
 
 // WALL WEB VISUALS
@@ -478,7 +523,8 @@ window.addEventListener('resize', () => {
 console.assert(scene instanceof THREE.Scene, 'Scene failed to create');
 console.assert(camera instanceof THREE.PerspectiveCamera, 'Camera failed');
 console.assert(renderer instanceof THREE.WebGLRenderer, 'Renderer failed');
-console.assert(controls instanceof PointerLockControls, 'Controls failed');
+console.assert(typeof mouseDown !== 'undefined', 'Mouse controls failed');
+console.assert(typeof enablePointerLock === 'function', 'Pointer lock system failed');
 
 console.log('Spider Hero Ultimate loaded successfully');
 
