@@ -74,7 +74,7 @@ let bike, road;
 let speed = 0;
 let maxSpeed = 3;
 let distance = 0;
-let obstacles = [];
+let ramps = [];
 let worldObjects = [];
 let gameStarted = false;
 
@@ -137,7 +137,7 @@ function init() {
     createBike();
     createCity();
     createSky();
-    createObstacles();
+    createRamps();
 
     camera.position.set(0, 3, 8);
 
@@ -289,31 +289,33 @@ function createSky() {
     scene.add(stars);
 }
 
-function createObstacles() {
-    for (let i = 0; i < 30; i++) {
-        const geo = new THREE.BoxGeometry(2, 2, 4);
+function createRamps() {
+    for (let i = 0; i < 25; i++) {
+        const geo = new THREE.BoxGeometry(4, 1, 8);
         const mat = new THREE.MeshStandardMaterial({
-            color: 0xff0000,
-            emissive: 0xaa0000,
-            emissiveIntensity: 1
+            color: 0xff00ff,
+            emissive: 0xaa00aa,
+            emissiveIntensity: 1,
+            metalness: 0.8,
+            roughness: 0.2
         });
 
-        const car = new THREE.Mesh(geo, mat);
+        const ramp = new THREE.Mesh(geo, mat);
 
-        resetObstacle(car, i * -50);
+        ramp.rotation.x = -0.35;
 
-        car.castShadow = true;
-        scene.add(car);
-        obstacles.push(car);
+        ramp.position.set(
+            (Math.floor(Math.random() * 3) - 1) * 5,
+            0.5,
+            -i * 120
+        );
+
+        ramp.castShadow = true;
+        ramp.receiveShadow = true;
+
+        scene.add(ramp);
+        ramps.push(ramp);
     }
-}
-
-function resetObstacle(obj, zPos = -300) {
-    obj.position.set(
-        (Math.floor(Math.random() * 3) - 1) * 5,
-        1,
-        zPos
-    );
 }
 
 window.startGame = function() {
@@ -368,21 +370,19 @@ function updateWorld() {
         }
     });
 
-    obstacles.forEach(car => {
-        car.position.z += speed * 5;
+    ramps.forEach(ramp => {
+        ramp.position.z += speed * 5;
 
-        if (car.position.z > 10) {
-            resetObstacle(car, -600);
+        if (ramp.position.z > 20) {
+            ramp.position.z = -3000;
+            ramp.position.x = (Math.floor(Math.random() * 3) - 1) * 5;
         }
 
-        // collision
-        const dx = bike.position.x - car.position.x;
-        const dz = bike.position.z - car.position.z;
+        const dx = bike.position.x - ramp.position.x;
+        const dz = bike.position.z - ramp.position.z;
 
-        if (Math.abs(dx) < 1.8 && Math.abs(dz) < 3) {
-            speed *= 0.5;
-
-            bike.rotation.x = Math.sin(Date.now() * 0.02) * 0.2;
+        if (Math.abs(dx) < 2.5 && Math.abs(dz) < 5) {
+            bike.position.y = 3;
         }
     });
 
@@ -406,6 +406,8 @@ function animate() {
     controls();
     updateWorld();
     cameraFollow();
+
+    bike.position.y += (1 - bike.position.y) * 0.08;
 
     renderer.render(scene, camera);
 }
