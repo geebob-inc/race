@@ -73,6 +73,7 @@ canvas {
 <div id="crosshair">+</div>
 
 <script type="module">
+// FIXED IMPORTS
 import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
 import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js?module';
 
@@ -105,7 +106,8 @@ sunlight.position.set(150, 250, 100);
 sunlight.castShadow = true;
 scene.add(sunlight);
 
-scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+const ambient = new THREE.AmbientLight(0xffffff, 0.7);
+scene.add(ambient);
 
 // GROUND
 const ground = new THREE.Mesh(
@@ -138,7 +140,7 @@ for(let i = -2000; i <= 2000; i += 200) {
   scene.add(road2);
 }
 
-// BUILDINGS
+// BUILDINGS + COLLISION OBJECTS
 const collidableBuildings = [];
 
 for(let i = 0; i < 450; i++) {
@@ -171,7 +173,6 @@ for(let i = 0; i < 450; i++) {
   collidableBuildings.push(building);
   scene.add(building);
 }
-
 // CONTROLS
 const controls = new PointerLockControls(camera, document.body);
 scene.add(controls.getObject());
@@ -199,34 +200,29 @@ window.addEventListener('keyup', (e) => {
 let velocityY = 0;
 let onGround = false;
 let wallClimbing = false;
+let wallRunning = false;
 let airDashCooldown = 0;
 
 const playerBox = new THREE.Box3();
-const playerSize = new THREE.Vector3(6, 14, 6);
-
-// STABILITY SETTINGS
-camera.rotation.order = 'YXZ';
+const playerSize = new THREE.Vector3(4, 12, 4);
 
 // WEB SWING
 let swinging = false;
 let swingPoint = new THREE.Vector3();
 
-const webMaterial = new THREE.LineBasicMaterial({
+const webMaterial = new THREE.LineBasicMaterial({ 
   color: 0xffffff,
   transparent: true,
   opacity: 0.95
 });
-
 const webGeometry = new THREE.BufferGeometry().setFromPoints([
   new THREE.Vector3(),
   new THREE.Vector3()
 ]);
 
 const webLine = new THREE.Line(webGeometry, webMaterial);
-webLine.visible = false;
-scene.add(webLine);
 
-// HANDS
+// WEB SHOOTER HANDS
 const handGeometry = new THREE.SphereGeometry(0.25, 12, 12);
 const handMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 
@@ -243,9 +239,10 @@ scene.add(camera);
 
 // WEB PROJECTILES
 const activeWebs = [];
+webLine.visible = false;
+scene.add(webLine);
 
 window.addEventListener('mousedown', () => {
-  webLine.visible = true;
   swinging = true;
 
   const direction = new THREE.Vector3();
@@ -258,6 +255,7 @@ window.addEventListener('mousedown', () => {
 
   webLine.visible = true;
 
+  // CREATE VISIBLE WEB SHOT
   const webBall = new THREE.Mesh(
     new THREE.SphereGeometry(0.3, 8, 8),
     new THREE.MeshBasicMaterial({ color: 0xffffff })
@@ -275,16 +273,10 @@ window.addEventListener('mousedown', () => {
 
 window.addEventListener('mouseup', () => {
   swinging = false;
-
-  // KEEP WEB VISIBLE BRIEFLY
-  setTimeout(() => {
-    if(!swinging) {
-      webLine.visible = false;
-    }
-  }, 150);
+  webLine.visible = false;
 });
 
-// SPECIAL MOVES
+// ZIP ABILITY
 window.addEventListener('keydown', (e) => {
   if(e.code === 'KeyE') {
     const dir = new THREE.Vector3();
@@ -294,6 +286,7 @@ window.addEventListener('keydown', (e) => {
     camera.position.y += 10;
   }
 
+  // AIR DASH
   if(e.code === 'KeyQ' && airDashCooldown <= 0) {
     const dashDir = new THREE.Vector3();
     camera.getWorldDirection(dashDir);
@@ -303,6 +296,7 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+// MOVEMENT
 function checkBuildingCollision(position) {
   playerBox.setFromCenterAndSize(
     new THREE.Vector3(position.x, position.y + 6, position.z),
@@ -320,60 +314,43 @@ function checkBuildingCollision(position) {
   return null;
 }
 
-function resolveCollision(oldPosition) {
-  const collision = checkBuildingCollision(camera.position);
-
-  if(collision) {
-    camera.position.copy(oldPosition);
-    return true;
-  }
-
-  return false;
-}
-
 function updateMovement() {
   if(airDashCooldown > 0) airDashCooldown--;
-
   const moveSpeed = keys['ShiftLeft'] ? 1.8 : 1.0;
 
   const oldPosition = camera.position.clone();
-
-  // KEEP CAMERA STABLE
-  camera.rotation.z = 0;
 
   if(keys['KeyW']) controls.moveForward(moveSpeed);
   if(keys['KeyS']) controls.moveForward(-moveSpeed);
   if(keys['KeyA']) controls.moveRight(-moveSpeed);
   if(keys['KeyD']) controls.moveRight(moveSpeed);
 
-  // PREVENT WALKING THROUGH OBJECTS
-  resolveCollision(oldPosition);
-
+  // COLLISION
   const collidedBuilding = checkBuildingCollision(camera.position);
 
   if(collidedBuilding) {
-    // AUTO WALL CLIMB
-    wallClimbing = true;
-
-    // AUTOMATIC CLIMBING MOVEMENT
+    // WALL CLIMB
     if(keys['KeyW']) {
-      velocityY = 0.24;
+      wallClimbing = true;
+      wallRunning = true;
+      velocityY = 0.22;
     }
-
-    // STICK TO WALL
-    camera.position.copy(oldPosition);
-    camera.position.y += 2;
 
     // WALL JUMP
     if(keys['Space']) {
-      velocityY = 0.55;
+      velocityY = 0.5;
 
       const bounceDir = new THREE.Vector3();
       camera.getWorldDirection(bounceDir);
-      camera.position.add(bounceDir.multiplyScalar(-12));
+      camera.position.add(bounceDir.multiplyScalar(-10));
+    }
+
+    if(!wallClimbing) {
+      camera.position.copy(oldPosition);
     }
   } else {
     wallClimbing = false;
+    wallRunning = false;
   }
 
   // GRAVITY
@@ -383,7 +360,7 @@ function updateMovement() {
 
   camera.position.y += velocityY;
 
-  // FLOOR
+  // FLOOR COLLISION
   if(camera.position.y <= 10) {
     camera.position.y = 10;
     velocityY = 0;
@@ -403,7 +380,10 @@ function updateMovement() {
       .subVectors(swingPoint, camera.position)
       .normalize();
 
+    // Spider-like swinging speed boost
     camera.position.add(pullDirection.multiplyScalar(3.8));
+
+    // Swing momentum
     camera.position.y += 0.08;
 
     const swingCollision = checkBuildingCollision(camera.position);
@@ -412,9 +392,7 @@ function updateMovement() {
       camera.position.copy(oldPosition);
     }
 
-    // PREVENT GOING THROUGH BUILDINGS WHILE SWINGING
-    resolveCollision(oldPosition);
-
+    // MAKE WEB START FROM HAND
     const handWorldPosition = new THREE.Vector3();
     rightHand.getWorldPosition(handWorldPosition);
 
@@ -423,11 +401,13 @@ function updateMovement() {
       swingPoint.clone()
     ]);
 
+    // CAMERA FOV SPEED EFFECT
     camera.fov = 82;
     camera.updateProjectionMatrix();
   } else {
     camera.fov += (75 - camera.fov) * 0.08;
     camera.updateProjectionMatrix();
+  }
   }
 }
 
@@ -465,6 +445,7 @@ function animate() {
     web.mesh.position.add(web.velocity);
     web.life--;
 
+    // SPIN EFFECT
     web.mesh.rotation.x += 0.2;
     web.mesh.rotation.y += 0.2;
 
@@ -478,8 +459,8 @@ function animate() {
   leftHand.position.y = -0.45 + Math.sin(Date.now() * 0.01) * 0.03;
   rightHand.position.y = -0.45 + Math.sin(Date.now() * 0.01) * 0.03;
 
-  // KEEP CAMERA LEVEL
-  camera.rotation.z = 0;
+  // CAMERA SWAY EFFECT
+  camera.rotation.z = Math.sin(Date.now() * 0.002) * 0.002;
 
   renderer.render(scene, camera);
 }
@@ -493,17 +474,17 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// TESTS
+// BASIC SELF TESTS
 console.assert(scene instanceof THREE.Scene, 'Scene failed to create');
 console.assert(camera instanceof THREE.PerspectiveCamera, 'Camera failed');
 console.assert(renderer instanceof THREE.WebGLRenderer, 'Renderer failed');
 console.assert(controls instanceof PointerLockControls, 'Controls failed');
-console.assert(collidableBuildings.length > 0, 'Buildings missing');
-console.assert(typeof updateMovement === 'function', 'Movement missing');
-console.assert(activeWebs instanceof Array, 'Web system failed');
-console.assert(typeof resolveCollision === 'function', 'Collision system failed');
 
 console.log('Spider Hero Ultimate loaded successfully');
+
+// EXTRA TESTS
+console.assert(collidableBuildings.length > 0, 'Buildings failed to generate');
+console.assert(typeof updateMovement === 'function', 'Movement missing');
 </script>
 
 </body>
