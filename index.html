@@ -1,536 +1,420 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Spider Hero FP</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neo Rider X</title>
 <style>
-body {
-  margin: 0;
-  overflow: hidden;
-  background: black;
-  font-family: Arial, sans-serif;
+html, body {
+    margin: 0;
+    overflow: hidden;
+    background: black;
+    font-family: Arial, sans-serif;
 }
 
 #ui {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  color: white;
-  z-index: 100;
-  background: rgba(0,0,0,0.55);
-  padding: 14px;
-  border-radius: 14px;
-  max-width: 260px;
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    color: white;
+    z-index: 10;
+    font-size: 20px;
+    text-shadow: 0 0 10px cyan;
 }
 
-#crosshair {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 30px;
-  z-index: 100;
-  pointer-events: none;
+#start {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    background: rgba(0,0,0,0.7);
+    padding: 20px;
+    border: 2px solid cyan;
+    border-radius: 20px;
+    text-align: center;
+    z-index: 20;
 }
 
-#loading {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 28px;
-  background: black;
-  z-index: 200;
+button {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    background: cyan;
+    color: black;
+    font-size: 18px;
+    cursor: pointer;
 }
 
 canvas {
-  display: block;
+    display: block;
 }
 </style>
 </head>
 <body>
 
-<div id="loading">Click to start Spider Hero<br><br>Mouse lock enabled when supported.</div>
-
 <div id="ui">
-  <h2>🕷 Spider Hero</h2>
-  <div>Ultimate Spider Movement</div>
-  <br>
-  <b>Controls</b><br>
-  WASD = Move<br>
-  Mouse = Look Around<br>
-  SPACE = Jump / Wall Jump<br>
-  SHIFT = Sprint<br>
-  Hold Left Click = Web Swing<br>
-  E = Zip To Building<br>
-  Q = Air Dash
+    Speed: <span id="speed">0</span> MPH<br>
+    Distance: <span id="distance">0</span>
 </div>
 
-<div id="crosshair">+</div>
+<div id="start">
+    <h1>NEO RIDER X</h1>
+    <p>WASD / Arrow Keys To Drive</p>
+    <p>SHIFT = Boost</p>
+    <button onclick="startGame()">START GAME</button>
+</div>
 
 <script type="module">
-// FIXED IMPORTS
-import * as THREE from 'https://unpkg.com/three@0.160.0/build/three.module.js';
-import { PointerLockControls } from 'https://unpkg.com/three@0.160.0/examples/jsm/controls/PointerLockControls.js?module';
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js';
 
-const loading = document.getElementById('loading');
+let scene, camera, renderer;
+let bike, road;
+let speed = 0;
+let maxSpeed = 3;
+let distance = 0;
+let obstacles = [];
+let worldObjects = [];
+let gameStarted = false;
 
-// SCENE
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87ceeb);
-scene.fog = new THREE.Fog(0x87ceeb, 50, 900);
-
-// CAMERA
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  3000
-);
-
-camera.position.set(0, 10, 0);
-
-// RENDERER
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true;
-document.body.appendChild(renderer.domElement);
-
-// LIGHTS
-const sunlight = new THREE.DirectionalLight(0xffffff, 2);
-sunlight.position.set(150, 250, 100);
-sunlight.castShadow = true;
-scene.add(sunlight);
-
-const ambient = new THREE.AmbientLight(0xffffff, 0.7);
-scene.add(ambient);
-
-// GROUND
-const ground = new THREE.Mesh(
-  new THREE.PlaneGeometry(5000, 5000),
-  new THREE.MeshPhongMaterial({ color: 0x2e2e2e })
-);
-
-ground.rotation.x = -Math.PI / 2;
-ground.receiveShadow = true;
-scene.add(ground);
-
-// ROADS
-const roadMaterial = new THREE.MeshPhongMaterial({ color: 0x111111 });
-
-for(let i = -2000; i <= 2000; i += 200) {
-  const road1 = new THREE.Mesh(
-    new THREE.BoxGeometry(40, 0.1, 5000),
-    roadMaterial
-  );
-
-  road1.position.set(i, 0.05, 0);
-  scene.add(road1);
-
-  const road2 = new THREE.Mesh(
-    new THREE.BoxGeometry(5000, 0.1, 40),
-    roadMaterial
-  );
-
-  road2.position.set(0, 0.05, i);
-  scene.add(road2);
-}
-
-// BUILDINGS + COLLISION OBJECTS
-const collidableBuildings = [];
-
-for(let i = 0; i < 450; i++) {
-  const width = 20 + Math.random() * 40;
-  const height = 50 + Math.random() * 250;
-  const depth = 20 + Math.random() * 40;
-
-  const building = new THREE.Mesh(
-    new THREE.BoxGeometry(width, height, depth),
-    new THREE.MeshPhongMaterial({
-      color: new THREE.Color(
-        0.2 + Math.random() * 0.4,
-        0.2 + Math.random() * 0.4,
-        0.2 + Math.random() * 0.4
-      )
-    })
-  );
-
-  building.position.set(
-    (Math.random() - 0.5) * 4000,
-    height / 2,
-    (Math.random() - 0.5) * 4000
-  );
-
-  building.castShadow = true;
-  building.receiveShadow = true;
-
-  building.userData.boundingBox = new THREE.Box3().setFromObject(building);
-
-  collidableBuildings.push(building);
-  scene.add(building);
-}
-// POINTER LOCK + FALLBACK CONTROLS
-let mouseDown = false;
-let pointerLocked = false;
-
-function enablePointerLock() {
-  const canvas = renderer.domElement;
-
-  if(canvas.requestPointerLock) {
-    canvas.requestPointerLock();
-  }
-}
-
-window.addEventListener('mousedown', () => {
-  mouseDown = true;
-  loading.style.display = 'none';
-
-  // TRY POINTER LOCK
-  try {
-    enablePointerLock();
-  } catch(err) {
-    console.warn('Pointer lock blocked by sandbox, using fallback mouse controls');
-  }
-});
-
-window.addEventListener('mouseup', () => {
-  mouseDown = false;
-});
-
-// POINTER LOCK STATE
-window.addEventListener('pointerlockchange', () => {
-  pointerLocked = document.pointerLockElement === renderer.domElement;
-});
-
-window.addEventListener('mousemove', (e) => {
-  // POINTER LOCK CAMERA
-  if(pointerLocked || mouseDown) {
-    camera.rotation.y -= e.movementX * 0.002;
-    camera.rotation.x -= e.movementY * 0.002;
-
-    camera.rotation.x = Math.max(
-      -Math.PI / 2,
-      Math.min(Math.PI / 2, camera.rotation.x)
-    );
-  }
-});
-
-// INPUT
 const keys = {};
 
-window.addEventListener('keydown', (e) => {
-  keys[e.code] = true;
-});
-
-window.addEventListener('keyup', (e) => {
-  keys[e.code] = false;
-});
-
-// PLAYER PHYSICS
-let velocityY = 0;
-let onGround = false;
-let wallClimbing = false;
-let wallRunning = false;
-let airDashCooldown = 0;
-
-const playerBox = new THREE.Box3();
-const playerSize = new THREE.Vector3(4, 12, 4);
-
-// WEB SWING
-let swinging = false;
-let swingPoint = new THREE.Vector3();
-
-const webMaterial = new THREE.LineBasicMaterial({ 
-  color: 0xffffff,
-  transparent: true,
-  opacity: 0.95
-});
-const webGeometry = new THREE.BufferGeometry().setFromPoints([
-  new THREE.Vector3(),
-  new THREE.Vector3()
-]);
-
-const webLine = new THREE.Line(webGeometry, webMaterial);
-
-// WEB SHOOTER HANDS
-const handGeometry = new THREE.SphereGeometry(0.25, 12, 12);
-const handMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-
-const leftHand = new THREE.Mesh(handGeometry, handMaterial);
-const rightHand = new THREE.Mesh(handGeometry, handMaterial);
-
-camera.add(leftHand);
-camera.add(rightHand);
-
-leftHand.position.set(-0.45, -0.45, -1);
-rightHand.position.set(0.45, -0.45, -1);
-
-scene.add(camera);
-
-// WEB PROJECTILES
-const activeWebs = [];
-webLine.visible = false;
-scene.add(webLine);
-
-window.addEventListener('mousedown', () => {
-  swinging = true;
-
-  const direction = new THREE.Vector3();
-  camera.getWorldDirection(direction);
-
-  swingPoint.copy(camera.position)
-    .add(direction.multiplyScalar(120));
-
-  swingPoint.y += 70;
-
-  webLine.visible = true;
-
-  // CREATE VISIBLE WEB SHOT
-  const webBall = new THREE.Mesh(
-    new THREE.SphereGeometry(0.3, 8, 8),
-    new THREE.MeshBasicMaterial({ color: 0xffffff })
-  );
-
-  webBall.position.copy(camera.position);
-  scene.add(webBall);
-
-  activeWebs.push({
-    mesh: webBall,
-    velocity: direction.clone().multiplyScalar(6),
-    life: 60
-  });
-});
-
-window.addEventListener('mouseup', () => {
-  swinging = false;
-  webLine.visible = false;
-});
-
-// ZIP ABILITY
-window.addEventListener('keydown', (e) => {
-  if(e.code === 'KeyE') {
-    const dir = new THREE.Vector3();
-    camera.getWorldDirection(dir);
-
-    camera.position.add(dir.multiplyScalar(30));
-    camera.position.y += 10;
-  }
-
-  // AIR DASH
-  if(e.code === 'KeyQ' && airDashCooldown <= 0) {
-    const dashDir = new THREE.Vector3();
-    camera.getWorldDirection(dashDir);
-
-    camera.position.add(dashDir.multiplyScalar(25));
-    airDashCooldown = 60;
-  }
-});
-
-// MOVEMENT
-function checkBuildingCollision(position) {
-  playerBox.setFromCenterAndSize(
-    new THREE.Vector3(position.x, position.y + 6, position.z),
-    playerSize
-  );
-
-  for(const building of collidableBuildings) {
-    building.userData.boundingBox.setFromObject(building);
-
-    if(playerBox.intersectsBox(building.userData.boundingBox)) {
-      return building;
-    }
-  }
-
-  return null;
-}
-
-function updateMovement() {
-  if(airDashCooldown > 0) airDashCooldown--;
-  const moveSpeed = keys['ShiftLeft'] ? 1.8 : 1.0;
-
-  const oldPosition = camera.position.clone();
-
-  const forward = new THREE.Vector3(
-    Math.sin(camera.rotation.y),
-    0,
-    Math.cos(camera.rotation.y)
-  );
-
-  const right = new THREE.Vector3(
-    Math.cos(camera.rotation.y),
-    0,
-    -Math.sin(camera.rotation.y)
-  );
-
-  if(keys['KeyW']) camera.position.add(forward.clone().multiplyScalar(moveSpeed));
-  if(keys['KeyS']) camera.position.add(forward.clone().multiplyScalar(-moveSpeed));
-  if(keys['KeyA']) camera.position.add(right.clone().multiplyScalar(-moveSpeed));
-  if(keys['KeyD']) camera.position.add(right.clone().multiplyScalar(moveSpeed));
-
-  // COLLISION
-  const collidedBuilding = checkBuildingCollision(camera.position);
-
-  if(collidedBuilding) {
-    // WALL CLIMB
-    if(keys['KeyW']) {
-      wallClimbing = true;
-      wallRunning = true;
-      velocityY = 0.22;
-    }
-
-    // WALL JUMP
-    if(keys['Space']) {
-      velocityY = 0.5;
-
-      const bounceDir = new THREE.Vector3();
-      camera.getWorldDirection(bounceDir);
-      camera.position.add(bounceDir.multiplyScalar(-10));
-    }
-
-    if(!wallClimbing) {
-      camera.position.copy(oldPosition);
-    }
-  } else {
-    wallClimbing = false;
-    wallRunning = false;
-  }
-
-  // GRAVITY
-  if(!wallClimbing) {
-    velocityY -= 0.02;
-  }
-
-  camera.position.y += velocityY;
-
-  // FLOOR COLLISION
-  if(camera.position.y <= 10) {
-    camera.position.y = 10;
-    velocityY = 0;
-    onGround = true;
-    wallClimbing = false;
-  }
-
-  // JUMP
-  if(keys['Space'] && onGround) {
-    velocityY = 0.45;
-    onGround = false;
-  }
-
-  // WEB SWINGING
-  if(swinging) {
-    const pullDirection = new THREE.Vector3()
-      .subVectors(swingPoint, camera.position)
-      .normalize();
-
-    // Spider-like swinging speed boost
-    camera.position.add(pullDirection.multiplyScalar(3.8));
-
-    // Swing momentum
-    camera.position.y += 0.08;
-
-    const swingCollision = checkBuildingCollision(camera.position);
-
-    if(swingCollision && !wallClimbing) {
-      camera.position.copy(oldPosition);
-    }
-
-    // MAKE WEB START FROM HAND
-    const handWorldPosition = new THREE.Vector3();
-    rightHand.getWorldPosition(handWorldPosition);
-
-    webGeometry.setFromPoints([
-      handWorldPosition,
-      swingPoint.clone()
-    ]);
-
-    // CAMERA FOV SPEED EFFECT
-    camera.fov = 82;
-    camera.updateProjectionMatrix();
-  } else {
-    camera.fov += (75 - camera.fov) * 0.08;
-    camera.updateProjectionMatrix();
-  }
-}
-
-// WALL WEB VISUALS
-for(const building of collidableBuildings.slice(0, 100)) {
-  const webPattern = new THREE.Mesh(
-    new THREE.PlaneGeometry(8, 8),
-    new THREE.MeshBasicMaterial({
-      color: 0xffffff,
-      transparent: true,
-      opacity: 0.15,
-      side: THREE.DoubleSide
-    })
-  );
-
-  webPattern.position.set(
-    building.position.x,
-    building.position.y,
-    building.position.z + (building.geometry.parameters.depth / 2) + 0.2
-  );
-
-  scene.add(webPattern);
-}
-
-// ANIMATION
-function animate() {
-  requestAnimationFrame(animate);
-
-  updateMovement();
-
-  // UPDATE WEB PROJECTILES
-  for(let i = activeWebs.length - 1; i >= 0; i--) {
-    const web = activeWebs[i];
-
-    web.mesh.position.add(web.velocity);
-    web.life--;
-
-    // SPIN EFFECT
-    web.mesh.rotation.x += 0.2;
-    web.mesh.rotation.y += 0.2;
-
-    if(web.life <= 0) {
-      scene.remove(web.mesh);
-      activeWebs.splice(i, 1);
-    }
-  }
-
-  // HAND ANIMATION
-  leftHand.position.y = -0.45 + Math.sin(Date.now() * 0.01) * 0.03;
-  rightHand.position.y = -0.45 + Math.sin(Date.now() * 0.01) * 0.03;
-
-  // CAMERA SWAY EFFECT
-  camera.rotation.z = Math.sin(Date.now() * 0.002) * 0.002;
-
-  renderer.render(scene, camera);
-}
-
+init();
 animate();
 
-// RESIZE
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+function init() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.Fog(0x000000, 20, 180);
 
-// BASIC SELF TESTS
-console.assert(scene instanceof THREE.Scene, 'Scene failed to create');
-console.assert(camera instanceof THREE.PerspectiveCamera, 'Camera failed');
-console.assert(renderer instanceof THREE.WebGLRenderer, 'Renderer failed');
-console.assert(typeof mouseDown !== 'undefined', 'Mouse controls failed');
-console.assert(typeof enablePointerLock === 'function', 'Pointer lock system failed');
+    camera = new THREE.PerspectiveCamera(
+        75,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        1000
+    );
 
-console.log('Spider Hero Ultimate loaded successfully');
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
 
-// EXTRA TESTS
-console.assert(collidableBuildings.length > 0, 'Buildings failed to generate');
-console.assert(typeof updateMovement === 'function', 'Movement missing');
+    // Lighting
+    const hemi = new THREE.HemisphereLight(0x00ffff, 0x111111, 1.4);
+    scene.add(hemi);
+
+    const light = new THREE.DirectionalLight(0xffffff, 2);
+    light.position.set(20, 40, 20);
+    light.castShadow = true;
+    light.shadow.mapSize.width = 2048;
+    light.shadow.mapSize.height = 2048;
+    scene.add(light);
+
+    // City glow
+    const neon1 = new THREE.PointLight(0x00ffff, 10, 80);
+    neon1.position.set(0, 20, -20);
+    scene.add(neon1);
+
+    const neon2 = new THREE.PointLight(0xff00ff, 10, 80);
+    neon2.position.set(0, 15, 40);
+    scene.add(neon2);
+
+    // Road
+    const roadGeo = new THREE.PlaneGeometry(20, 2000);
+    const roadMat = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        metalness: 0.8,
+        roughness: 0.2
+    });
+
+    road = new THREE.Mesh(roadGeo, roadMat);
+    road.rotation.x = -Math.PI / 2;
+    road.receiveShadow = true;
+    scene.add(road);
+
+    createRoadLines();
+    createBike();
+    createCity();
+    createSky();
+    createObstacles();
+
+    camera.position.set(0, 3, 8);
+
+    window.addEventListener('resize', onResize);
+
+    document.addEventListener('keydown', e => {
+        keys[e.key.toLowerCase()] = true;
+    });
+
+    document.addEventListener('keyup', e => {
+        keys[e.key.toLowerCase()] = false;
+    });
+}
+
+function createRoadLines() {
+    for (let i = 0; i < 150; i++) {
+        const geo = new THREE.BoxGeometry(0.3, 0.02, 4);
+        const mat = new THREE.MeshStandardMaterial({
+            color: 0xffffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 0.6
+        });
+
+        const line = new THREE.Mesh(geo, mat);
+        line.position.set(0, 0.02, -i * 12);
+        scene.add(line);
+        worldObjects.push(line);
+    }
+}
+
+function createBike() {
+    bike = new THREE.Group();
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0x00ffff,
+        emissive: 0x0088aa,
+        metalness: 1,
+        roughness: 0.2
+    });
+
+    const blackMat = new THREE.MeshStandardMaterial({
+        color: 0x111111,
+        metalness: 0.9,
+        roughness: 0.3
+    });
+
+    // Main body
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1, 0.5, 3),
+        bodyMat
+    );
+    body.castShadow = true;
+    bike.add(body);
+
+    // Seat
+    const seat = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 0.3, 1),
+        blackMat
+    );
+    seat.position.set(0, 0.4, 0);
+    bike.add(seat);
+
+    // Wheels
+    const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 24);
+
+    const wheel1 = new THREE.Mesh(wheelGeo, blackMat);
+    wheel1.rotation.z = Math.PI / 2;
+    wheel1.position.set(0, -0.5, 1.2);
+    bike.add(wheel1);
+
+    const wheel2 = new THREE.Mesh(wheelGeo, blackMat);
+    wheel2.rotation.z = Math.PI / 2;
+    wheel2.position.set(0, -0.5, -1.2);
+    bike.add(wheel2);
+
+    // Headlight
+    const headlight = new THREE.PointLight(0x00ffff, 10, 40);
+    headlight.position.set(0, 0.2, -2);
+    bike.add(headlight);
+
+    bike.position.y = 1;
+    scene.add(bike);
+}
+
+function createCity() {
+    for (let i = 0; i < 300; i++) {
+        const height = Math.random() * 30 + 5;
+
+        const geo = new THREE.BoxGeometry(
+            Math.random() * 5 + 3,
+            height,
+            Math.random() * 5 + 3
+        );
+
+        const mat = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(
+                Math.random() * 0.3,
+                Math.random() * 0.8,
+                1
+            ),
+            emissive: new THREE.Color(
+                0,
+                Math.random() * 0.5,
+                Math.random()
+            ),
+            emissiveIntensity: 0.5,
+            metalness: 0.7,
+            roughness: 0.3
+        });
+
+        const building = new THREE.Mesh(geo, mat);
+
+        building.position.x = Math.random() > 0.5
+            ? Math.random() * 30 + 15
+            : -Math.random() * 30 - 15;
+
+        building.position.y = height / 2;
+        building.position.z = -Math.random() * 2000;
+
+        building.castShadow = true;
+        building.receiveShadow = true;
+
+        scene.add(building);
+        worldObjects.push(building);
+    }
+}
+
+function createSky() {
+    const starsGeo = new THREE.BufferGeometry();
+    const starVertices = [];
+
+    for (let i = 0; i < 10000; i++) {
+        starVertices.push((Math.random() - 0.5) * 2000);
+        starVertices.push(Math.random() * 1000);
+        starVertices.push((Math.random() - 0.5) * 2000);
+    }
+
+    starsGeo.setAttribute(
+        'position',
+        new THREE.Float32BufferAttribute(starVertices, 3)
+    );
+
+    const starsMat = new THREE.PointsMaterial({
+        color: 0xffffff,
+        size: 0.7
+    });
+
+    const stars = new THREE.Points(starsGeo, starsMat);
+    scene.add(stars);
+}
+
+function createObstacles() {
+    for (let i = 0; i < 30; i++) {
+        const geo = new THREE.BoxGeometry(2, 2, 4);
+        const mat = new THREE.MeshStandardMaterial({
+            color: 0xff0000,
+            emissive: 0xaa0000,
+            emissiveIntensity: 1
+        });
+
+        const car = new THREE.Mesh(geo, mat);
+
+        resetObstacle(car, i * -50);
+
+        car.castShadow = true;
+        scene.add(car);
+        obstacles.push(car);
+    }
+}
+
+function resetObstacle(obj, zPos = -300) {
+    obj.position.set(
+        (Math.floor(Math.random() * 3) - 1) * 5,
+        1,
+        zPos
+    );
+}
+
+window.startGame = function() {
+    gameStarted = true;
+    document.getElementById('start').style.display = 'none';
+}
+
+function controls() {
+    if (!gameStarted) return;
+
+    if (keys['w'] || keys['arrowup']) {
+        speed += 0.03;
+    }
+
+    if (keys['s'] || keys['arrowdown']) {
+        speed -= 0.04;
+    }
+
+    if (keys['shift']) {
+        maxSpeed = 5;
+    } else {
+        maxSpeed = 3;
+    }
+
+    speed *= 0.98;
+
+    speed = Math.max(0, Math.min(speed, maxSpeed));
+
+    if (keys['a'] || keys['arrowleft']) {
+        bike.position.x -= 0.18 + speed * 0.05;
+        bike.rotation.z = 0.3;
+    } else if (keys['d'] || keys['arrowright']) {
+        bike.position.x += 0.18 + speed * 0.05;
+        bike.rotation.z = -0.3;
+    } else {
+        bike.rotation.z *= 0.85;
+    }
+
+    bike.position.x = Math.max(-8, Math.min(8, bike.position.x));
+}
+
+function updateWorld() {
+    if (!gameStarted) return;
+
+    distance += speed;
+
+    worldObjects.forEach(obj => {
+        obj.position.z += speed * 4;
+
+        if (obj.position.z > 100) {
+            obj.position.z -= 2000;
+        }
+    });
+
+    obstacles.forEach(car => {
+        car.position.z += speed * 5;
+
+        if (car.position.z > 10) {
+            resetObstacle(car, -600);
+        }
+
+        // collision
+        const dx = bike.position.x - car.position.x;
+        const dz = bike.position.z - car.position.z;
+
+        if (Math.abs(dx) < 1.8 && Math.abs(dz) < 3) {
+            speed *= 0.5;
+
+            bike.rotation.x = Math.sin(Date.now() * 0.02) * 0.2;
+        }
+    });
+
+    document.getElementById('speed').textContent = Math.floor(speed * 80);
+    document.getElementById('distance').textContent = Math.floor(distance);
+}
+
+function cameraFollow() {
+    camera.position.x += (bike.position.x - camera.position.x) * 0.08;
+
+    camera.lookAt(
+        bike.position.x,
+        bike.position.y + 1,
+        bike.position.z - 20
+    );
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+
+    controls();
+    updateWorld();
+    cameraFollow();
+
+    renderer.render(scene, camera);
+}
+
+function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+}
 </script>
 
 </body>
