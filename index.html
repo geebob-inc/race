@@ -72,7 +72,7 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161/build/three.mod
 let scene, camera, renderer;
 let bike, road;
 let speed = 0;
-let maxSpeed = 3;
+let maxSpeed = 9;
 let distance = 0;
 let ramps = [];
 let worldObjects = [];
@@ -174,13 +174,13 @@ function createBike() {
     const bodyMat = new THREE.MeshStandardMaterial({
         color: 0x00ffff,
         emissive: 0x0088aa,
-        metalness: 1,
+        metalness: 9,
         roughness: 0.2
     });
 
     const blackMat = new THREE.MeshStandardMaterial({
         color: 0x111111,
-        metalness: 0.9,
+        metalness: 1.3,
         roughness: 0.3
     });
 
