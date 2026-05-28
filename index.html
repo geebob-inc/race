@@ -1,653 +1,390 @@
-# High Graphics Motorcycle Game (Single HTML File)
 
-Save this as `index.html` and open it in a browser or upload to GitHub Pages.
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Neo Rider X</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Galaxy Arcade</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+
 <style>
-html, body {
-    margin: 0;
-    overflow: hidden;
-    background: black;
-    font-family: Arial, sans-serif;
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
 }
 
-#ui {
-    position: absolute;
-    top: 15px;
-    left: 15px;
-    color: white;
-    z-index: 10;
-    font-size: 20px;
-    text-shadow: 0 0 10px cyan;
+body{
+    background:#070b17;
+    color:white;
+    font-family:'Orbitron',sans-serif;
+    overflow-x:hidden;
 }
 
-#start {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    background: rgba(0,0,0,0.7);
-    padding: 20px;
-    border: 2px solid cyan;
-    border-radius: 20px;
-    text-align: center;
-    z-index: 20;
+header{
+    width:100%;
+    padding:20px;
+    background:linear-gradient(90deg,#00e5ff,#8a2eff);
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    position:sticky;
+    top:0;
+    z-index:100;
+    box-shadow:0 0 20px rgba(0,229,255,.5);
 }
 
-button {
-    padding: 12px 20px;
-    border: none;
-    border-radius: 10px;
-    background: cyan;
-    color: black;
-    font-size: 18px;
-    cursor: pointer;
+header h1{
+    font-size:2rem;
 }
 
-canvas {
-    display: block;
+.search-box{
+    width:300px;
+    max-width:50%;
+}
+
+.search-box input{
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    outline:none;
+    background:#111827;
+    color:white;
+    font-size:1rem;
+}
+
+.hero{
+    height:400px;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    background:
+    linear-gradient(rgba(0,0,0,.4),rgba(0,0,0,.6)),
+    url('https://images.unsplash.com/photo-1542751110-97427bbecf20?q=80&w=2070&auto=format&fit=crop');
+    background-size:cover;
+    background-position:center;
+}
+
+.hero-content h2{
+    font-size:4rem;
+    margin-bottom:20px;
+    text-shadow:0 0 20px cyan;
+}
+
+.hero-content p{
+    font-size:1.2rem;
+    margin-bottom:30px;
+}
+
+.hero-content button{
+    padding:15px 30px;
+    font-size:1rem;
+    border:none;
+    border-radius:15px;
+    background:#00e5ff;
+    color:black;
+    cursor:pointer;
+    font-weight:bold;
+    transition:.3s;
+}
+
+.hero-content button:hover{
+    transform:scale(1.1);
+}
+
+.section-title{
+    font-size:2rem;
+    padding:30px 40px 10px;
+}
+
+.games-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+    gap:25px;
+    padding:30px 40px 60px;
+}
+
+.game-card{
+    background:#101827;
+    border-radius:25px;
+    overflow:hidden;
+    transition:.3s;
+    cursor:pointer;
+    box-shadow:0 0 20px rgba(0,0,0,.5);
+    position:relative;
+}
+
+.game-card:hover{
+    transform:translateY(-10px) scale(1.03);
+    box-shadow:0 0 30px rgba(0,229,255,.4);
+}
+
+.game-card img{
+    width:100%;
+    height:180px;
+    object-fit:cover;
+}
+
+.game-info{
+    padding:20px;
+}
+
+.game-info h3{
+    margin-bottom:10px;
+    font-size:1.3rem;
+}
+
+.game-info p{
+    color:#a5b4fc;
+    font-size:.9rem;
+}
+
+.play-btn{
+    margin-top:15px;
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:12px;
+    background:#00e5ff;
+    color:black;
+    font-weight:bold;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.play-btn:hover{
+    transform:scale(1.03);
+}
+
+.categories{
+    display:flex;
+    gap:15px;
+    padding:20px 40px;
+    flex-wrap:wrap;
+}
+
+.category{
+    background:#111827;
+    padding:12px 20px;
+    border-radius:30px;
+    cursor:pointer;
+    transition:.3s;
+}
+
+.category:hover{
+    background:#00e5ff;
+    color:black;
+}
+
+footer{
+    text-align:center;
+    padding:30px;
+    background:#0b1220;
+    color:#94a3b8;
+}
+
+.modal{
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,.8);
+    display:none;
+    justify-content:center;
+    align-items:center;
+    z-index:1000;
+}
+
+.modal-content{
+    width:90%;
+    height:90%;
+    background:#111827;
+    border-radius:20px;
+    overflow:hidden;
+    position:relative;
+}
+
+.modal iframe{
+    width:100%;
+    height:100%;
+    border:none;
+}
+
+.close-btn{
+    position:absolute;
+    top:15px;
+    right:15px;
+    background:red;
+    color:white;
+    border:none;
+    width:40px;
+    height:40px;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:1.2rem;
+    z-index:5;
 }
 </style>
 </head>
 <body>
 
-<div id="ui">
-    <div id="message">Explore the city</div>
-    <div id="mission">Mission: Drive through 3 ramps</div>
-    Speed: <span id="speed">0</span> MPH<br>
-    Distance: <span id="distance">0</span>
+<header>
+    <h1>GALAXY ARCADE</h1>
+
+    <div class="search-box">
+        <input type="text" id="search" placeholder="Search games...">
+    </div>
+</header>
+
+<section class="hero">
+    <div class="hero-content">
+        <h2>PLAY AWESOME GAMES</h2>
+        <p>Fast games, neon graphics, and fun multiplayer vibes.</p>
+        <button onclick="scrollToGames()">START PLAYING</button>
+    </div>
+</section>
+
+<h2 class="section-title">Categories</h2>
+
+<div class="categories">
+    <div class="category">Racing</div>
+    <div class="category">Shooter</div>
+    <div class="category">Adventure</div>
+    <div class="category">Multiplayer</div>
+    <div class="category">Sports</div>
+    <div class="category">Survival</div>
 </div>
 
-<div id="start">
-    <h1>NEO RIDER X</h1>
-    <p>WASD / Arrow Keys To Drive</p>
-    <p>SHIFT = Boost</p>
-    <button onclick="startGame()">START GAME</button>
+<h2 class="section-title">Popular Games</h2>
+
+<section class="games-grid" id="gamesGrid">
+
+<div class="game-card" data-name="Cyber Rider">
+    <img src="https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=1200&auto=format&fit=crop">
+    <div class="game-info">
+        <h3>Cyber Rider</h3>
+        <p>High speed futuristic motorcycle racing.</p>
+        <button class="play-btn" onclick="openGame('https://example.com')">PLAY</button>
+    </div>
 </div>
 
-<script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js';
+<div class="game-card" data-name="Galaxy Shooter">
+    <img src="https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?q=80&w=1200&auto=format&fit=crop">
+    <div class="game-info">
+        <h3>Galaxy Shooter</h3>
+        <p>Fight alien ships in deep space battles.</p>
+        <button class="play-btn" onclick="openGame('https://example.com')">PLAY</button>
+    </div>
+</div>
 
-let scene, camera, renderer;
-let bike, rider, road;
-let speed = 0;
-let maxSpeed = 3;
-let distance = 0;
-let ramps = [];
-let worldObjects = [];
-let gameStarted = false;
-let onBike = true;
-let verticalVelocity = 0;
-let missionIndex = 0;
+<div class="game-card" data-name="Street Drift">
+    <img src="https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?q=80&w=1200&auto=format&fit=crop">
+    <div class="game-info">
+        <h3>Street Drift</h3>
+        <p>Drift through neon city streets.</p>
+        <button class="play-btn" onclick="openGame('https://example.com')">PLAY</button>
+    </div>
+</div>
 
-const missions = [
-    'Drive through 3 ramps',
-    'Talk to an NPC',
-    'Enter a building',
-    'Travel 2000 distance'
-];
+<div class="game-card" data-name="Zombie Survival">
+    <img src="https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1200&auto=format&fit=crop">
+    <div class="game-info">
+        <h3>Zombie Survival</h3>
+        <p>Survive endless zombie attacks.</p>
+        <button class="play-btn" onclick="openGame('https://example.com')">PLAY</button>
+    </div>
+</div>
 
-let rampHits = 0;
-let npcTalked = false;
-let enteredBuilding = false;
+<div class="game-card" data-name="Sky Warriors">
+    <img src="https://images.unsplash.com/photo-1462331940025-496dfbfc7564?q=80&w=1200&auto=format&fit=crop">
+    <div class="game-info">
+        <h3>Sky Warriors</h3>
+        <p>Epic air battles and missions.</p>
+        <button class="play-btn" onclick="openGame('https://example.com')">PLAY</button>
+    </div>
+</div>
 
-const keys = {};
+<div class="game-card" data-name="Mega Soccer">
+    <img src="https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=1200&auto=format&fit=crop">
+    <div class="game-info">
+        <h3>Mega Soccer</h3>
+        <p>Fast-paced multiplayer soccer fun.</p>
+        <button class="play-btn" onclick="openGame('https://example.com')">PLAY</button>
+    </div>
+</div>
 
-init();
-animate();
+</section>
 
-function init() {
-    scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0x000000, 20, 180);
+<div class="modal" id="gameModal">
+    <div class="modal-content">
+        <button class="close-btn" onclick="closeGame()">X</button>
+        <iframe id="gameFrame"></iframe>
+    </div>
+</div>
 
-    camera = new THREE.PerspectiveCamera(
-        75,
-        window.innerWidth / window.innerHeight,
-        0.1,
-        1000
-    );
+<footer>
+    © 2026 Galaxy Arcade - Play Free Browser Games
+</footer>
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
-
-    // Lighting
-    const hemi = new THREE.HemisphereLight(0x00ffff, 0x111111, 1.4);
-    scene.add(hemi);
-
-    const light = new THREE.DirectionalLight(0xffffff, 2);
-    light.position.set(20, 40, 20);
-    light.castShadow = true;
-    light.shadow.mapSize.width = 2048;
-    light.shadow.mapSize.height = 2048;
-    scene.add(light);
-
-    // City glow
-    const neon1 = new THREE.PointLight(0x00ffff, 10, 80);
-    neon1.position.set(0, 20, -20);
-    scene.add(neon1);
-
-    const neon2 = new THREE.PointLight(0xff00ff, 10, 80);
-    neon2.position.set(0, 15, 40);
-    scene.add(neon2);
-
-    // Road
-    const roadGeo = new THREE.PlaneGeometry(20, 2000);
-    const roadMat = new THREE.MeshStandardMaterial({
-        color: 0x111111,
-        metalness: 0.8,
-        roughness: 0.2
-    });
-
-    road = new THREE.Mesh(roadGeo, roadMat);
-    road.rotation.x = -Math.PI / 2;
-    road.receiveShadow = true;
-    scene.add(road);
-
-    createRoadLines();
-    createBike();
-    createRider();
-    createCity();
-    createSky();
-    createRamps();
-
-    camera.position.set(0, 3, 8);
-
-    window.addEventListener('resize', onResize);
-
-    document.addEventListener('keydown', e => {
-        keys[e.key.toLowerCase()] = true;
-    });
-
-    document.addEventListener('keyup', e => {
-        keys[e.key.toLowerCase()] = false;
-    });
-
-    document.addEventListener('keydown', e => {
-        if (e.key.toLowerCase() === 'e') {
-            onBike = !onBike;
-
-            if (onBike) {
-                rider.visible = false;
-            } else {
-                rider.visible = true;
-                rider.position.copy(bike.position);
-                rider.position.x += 2;
-            }
-        }
+<script>
+function scrollToGames(){
+    document.getElementById('gamesGrid').scrollIntoView({
+        behavior:'smooth'
     });
 }
 
-function createRoadLines() {
-    for (let i = 0; i < 150; i++) {
-        const geo = new THREE.BoxGeometry(0.3, 0.02, 4);
-        const mat = new THREE.MeshStandardMaterial({
-            color: 0xffffff,
-            emissive: 0x00ffff,
-            emissiveIntensity: 0.6
-        });
-
-        const line = new THREE.Mesh(geo, mat);
-        line.position.set(0, 0.02, -i * 12);
-        scene.add(line);
-        worldObjects.push(line);
-    }
+function openGame(url){
+    document.getElementById('gameModal').style.display='flex';
+    document.getElementById('gameFrame').src=url;
 }
 
-function createBike() {
-    bike = new THREE.Group();
-
-    const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0x00ffff,
-        emissive: 0x0088aa,
-        metalness: 1,
-        roughness: 0.2
-    });
-
-    const blackMat = new THREE.MeshStandardMaterial({
-        color: 0x111111,
-        metalness: 0.9,
-        roughness: 0.3
-    });
-
-    // Main body
-    const body = new THREE.Mesh(
-        new THREE.BoxGeometry(1, 0.5, 3),
-        bodyMat
-    );
-    body.castShadow = true;
-    bike.add(body);
-
-    // Seat
-    const seat = new THREE.Mesh(
-        new THREE.BoxGeometry(0.8, 0.3, 1),
-        blackMat
-    );
-    seat.position.set(0, 0.4, 0);
-    bike.add(seat);
-
-    // Wheels
-    const wheelGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 24);
-
-    const wheel1 = new THREE.Mesh(wheelGeo, blackMat);
-    wheel1.rotation.z = Math.PI / 2;
-    wheel1.position.set(0, -0.5, 1.2);
-    bike.add(wheel1);
-
-    const wheel2 = new THREE.Mesh(wheelGeo, blackMat);
-    wheel2.rotation.z = Math.PI / 2;
-    wheel2.position.set(0, -0.5, -1.2);
-    bike.add(wheel2);
-
-    // Headlight
-    const headlight = new THREE.PointLight(0x00ffff, 10, 40);
-    headlight.position.set(0, 0.2, -2);
-    bike.add(headlight);
-
-    bike.position.y = 1;
-    scene.add(bike);
+function closeGame(){
+    document.getElementById('gameModal').style.display='none';
+    document.getElementById('gameFrame').src='';
 }
 
-function createRider() {
-    rider = new THREE.Group();
+const search = document.getElementById('search');
+const cards = document.querySelectorAll('.game-card');
 
-    const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: 0x222222,
-        metalness: 0.5,
-        roughness: 0.5
-    });
+search.addEventListener('input', () => {
+    const value = search.value.toLowerCase();
 
-    const body = new THREE.Mesh(
-        new THREE.BoxGeometry(0.7, 1.2, 0.4),
-        bodyMat
-    );
-    body.position.y = 1.2;
-    rider.add(body);
+    cards.forEach(card => {
+        const name = card.dataset.name.toLowerCase();
 
-    const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.35, 16, 16),
-        bodyMat
-    );
-    head.position.y = 2.1;
-    rider.add(head);
-
-    rider.position.set(0, 0, 2);
-    rider.visible = false;
-    scene.add(rider);
-}
-
-function createCity() {
-    for (let i = 0; i < 120; i++) {
-        const height = Math.random() * 30 + 8;
-
-        const geo = new THREE.BoxGeometry(
-            Math.random() * 8 + 6,
-            height,
-            Math.random() * 8 + 6
-        );
-
-        const mat = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(
-                Math.random() * 0.3,
-                Math.random() * 0.8,
-                1
-            ),
-            emissive: new THREE.Color(
-                0,
-                Math.random() * 0.5,
-                Math.random()
-            ),
-            emissiveIntensity: 0.6,
-            metalness: 0.7,
-            roughness: 0.3
-        });
-
-        const building = new THREE.Mesh(geo, mat);
-
-        building.position.x = Math.random() > 0.5
-            ? Math.random() * 40 + 15
-            : -Math.random() * 40 - 15;
-
-        building.position.y = height / 2;
-        building.position.z = -Math.random() * 2500;
-
-        building.userData.enterable = Math.random() > 0.4;
-
-        scene.add(building);
-        worldObjects.push(building);
-
-        if (building.userData.enterable) {
-            createBuildingInterior(building);
-        }
-    }
-
-    createNPCs();
-}
-
-function createBuildingInterior(building) {
-    const floor = new THREE.Mesh(
-        new THREE.BoxGeometry(8, 0.2, 8),
-        new THREE.MeshStandardMaterial({
-            color: 0x222222,
-            emissive: 0x111111
-        })
-    );
-
-    floor.position.set(
-        building.position.x,
-        0.1,
-        building.position.z
-    );
-
-    scene.add(floor);
-    worldObjects.push(floor);
-
-    for (let i = 0; i < 3; i++) {
-        const table = new THREE.Mesh(
-            new THREE.BoxGeometry(1.5, 1, 1.5),
-            new THREE.MeshStandardMaterial({
-                color: 0x00ffff,
-                emissive: 0x003333
-            })
-        );
-
-        table.position.set(
-            building.position.x + (Math.random() - 0.5) * 5,
-            0.6,
-            building.position.z + (Math.random() - 0.5) * 5
-        );
-
-        scene.add(table);
-        worldObjects.push(table);
-    }
-}
-
-function createNPCs() {
-    for (let i = 0; i < 25; i++) {
-        const npc = new THREE.Group();
-
-        const body = new THREE.Mesh(
-            new THREE.BoxGeometry(0.7, 1.2, 0.4),
-            new THREE.MeshStandardMaterial({
-                color: Math.random() * 0xffffff,
-                emissive: 0x222222
-            })
-        );
-
-        body.position.y = 1;
-        npc.add(body);
-
-        const head = new THREE.Mesh(
-            new THREE.SphereGeometry(0.3, 12, 12),
-            new THREE.MeshStandardMaterial({ color: 0xffcc99 })
-        );
-
-        head.position.y = 1.9;
-        npc.add(head);
-
-        npc.position.set(
-            (Math.random() - 0.5) * 80,
-            0,
-            -Math.random() * 2000
-        );
-
-        npc.userData.talk = [
-            'Welcome to Neo City',
-            'Nice bike!',
-            'The night looks amazing',
-            'Watch the ramps ahead'
-        ][Math.floor(Math.random() * 4)];
-
-        scene.add(npc);
-        worldObjects.push(npc);
-    }
-}
-
-function createSky() {
-    const starsGeo = new THREE.BufferGeometry();
-    const starVertices = [];
-
-    for (let i = 0; i < 10000; i++) {
-        starVertices.push((Math.random() - 0.5) * 2000);
-        starVertices.push(Math.random() * 1000);
-        starVertices.push((Math.random() - 0.5) * 2000);
-    }
-
-    starsGeo.setAttribute(
-        'position',
-        new THREE.Float32BufferAttribute(starVertices, 3)
-    );
-
-    const starsMat = new THREE.PointsMaterial({
-        color: 0xffffff,
-        size: 0.7
-    });
-
-    const stars = new THREE.Points(starsGeo, starsMat);
-    scene.add(stars);
-}
-
-function createRamps() {
-    for (let i = 0; i < 25; i++) {
-        const geo = new THREE.BoxGeometry(4, 1, 8);
-        const mat = new THREE.MeshStandardMaterial({
-            color: 0xff00ff,
-            emissive: 0xaa00aa,
-            emissiveIntensity: 1,
-            metalness: 0.8,
-            roughness: 0.2
-        });
-
-        const ramp = new THREE.Mesh(geo, mat);
-
-        ramp.rotation.x = 0.35;
-
-        ramp.position.set(
-            (Math.floor(Math.random() * 3) - 1) * 5,
-            0.5,
-            -i * 120
-        );
-
-        ramp.castShadow = true;
-        ramp.receiveShadow = true;
-
-        scene.add(ramp);
-        ramps.push(ramp);
-    }
-}
-
-window.startGame = function() {
-    gameStarted = true;
-    document.getElementById('start').style.display = 'none';
-}
-
-function controls() {
-    if (!gameStarted) return;
-
-    if (onBike) {
-        if (keys['w'] || keys['arrowup']) speed += 0.03;
-        if (keys['s'] || keys['arrowdown']) speed -= 0.04;
-
-        maxSpeed = keys['shift'] ? 5 : 3;
-
-        speed *= 0.98;
-        speed = Math.max(0, Math.min(speed, maxSpeed));
-
-        if (keys['a'] || keys['arrowleft']) {
-            bike.position.x -= 0.18 + speed * 0.05;
-            bike.rotation.z = 0.3;
-        } else if (keys['d'] || keys['arrowright']) {
-            bike.position.x += 0.18 + speed * 0.05;
-            bike.rotation.z = -0.3;
+        if(name.includes(value)){
+            card.style.display='block';
         } else {
-            bike.rotation.z *= 0.85;
-        }
-
-        bike.position.x = Math.max(-8, Math.min(8, bike.position.x));
-
-    } else {
-        speed *= 0.92;
-
-        const walkSpeed = 0.18;
-
-        if (keys['w'] || keys['arrowup']) rider.position.z -= walkSpeed;
-        if (keys['s'] || keys['arrowdown']) rider.position.z += walkSpeed;
-        if (keys['a'] || keys['arrowleft']) rider.position.x -= walkSpeed;
-        if (keys['d'] || keys['arrowright']) rider.position.x += walkSpeed;
-
-        if (keys[' '] && rider.position.y <= 0.05) {
-            verticalVelocity = 0.25;
-        }
-
-        verticalVelocity -= 0.012;
-        rider.position.y += verticalVelocity;
-
-        if (rider.position.y < 0) {
-            rider.position.y = 0;
-            verticalVelocity = 0;
-        }
-
-        const dx = rider.position.x - bike.position.x;
-        const dz = rider.position.z - bike.position.z;
-
-        if (Math.sqrt(dx * dx + dz * dz) < 3 && keys['f']) {
-            onBike = true;
-            rider.visible = false;
-        }
-    }
-}
-
-function updateWorld() {
-    if (!gameStarted) return;
-
-    distance += speed;
-
-    let nearbyMessage = 'Explore the city';
-
-    worldObjects.forEach(obj => {
-        obj.position.z += speed * 4;
-
-        if (obj.position.z > 100) {
-            obj.position.z -= 2500;
-        }
-
-        if (!onBike && obj.userData && obj.userData.talk) {
-            const dx = rider.position.x - obj.position.x;
-            const dz = rider.position.z - obj.position.z;
-
-            if (Math.sqrt(dx * dx + dz * dz) < 4) {
-                nearbyMessage = 'NPC: ' + obj.userData.talk;
-                npcTalked = true;
-
-                if (missionIndex === 1) {
-                    missionIndex = 2;
-                }
-            }
+            card.style.display='none';
         }
     });
-
-    ramps.forEach(ramp => {
-        ramp.position.z += speed * 5;
-
-        if (ramp.position.z > 20) {
-            ramp.position.z = -3000;
-            ramp.position.x = (Math.floor(Math.random() * 3) - 1) * 5;
-        }
-
-        const dx = bike.position.x - ramp.position.x;
-        const dz = bike.position.z - ramp.position.z;
-
-        if (Math.abs(dx) < 2.5 && Math.abs(dz) < 5) {
-            bike.position.y = 3;
-            rampHits++;
-
-            if (missionIndex === 0 && rampHits >= 3) {
-                missionIndex = 1;
-            }
-        }
-    });
-
-    document.getElementById('speed').textContent = Math.floor(speed * 80);
-    document.getElementById('message').textContent = nearbyMessage;
-
-    if (!onBike) {
-        worldObjects.forEach(obj => {
-            if (obj.geometry && obj.geometry.type === 'BoxGeometry') {
-                const dx = rider.position.x - obj.position.x;
-                const dz = rider.position.z - obj.position.z;
-
-                if (Math.abs(dx) < 4 && Math.abs(dz) < 4 && obj.position.y < 1) {
-                    enteredBuilding = true;
-
-                    if (missionIndex === 2) {
-                        missionIndex = 3;
-                    }
-                }
-            }
-        });
-    }
-
-    if (missionIndex === 3 && distance >= 2000) {
-        missionIndex = 4;
-    }
-
-    const missionText = missionIndex >= missions.length
-        ? 'All Missions Complete!'
-        : 'Mission: ' + missions[missionIndex];
-
-    document.getElementById('mission').textContent = missionText;
-    document.getElementById('speed').textContent = Math.floor(speed * 80);
-    document.getElementById('distance').textContent = Math.floor(distance);
-}
-
-function cameraFollow() {
-    if (onBike) {
-        camera.position.x += (bike.position.x - camera.position.x) * 0.08;
-        camera.position.y += (4 - camera.position.y) * 0.08;
-        camera.position.z += (bike.position.z + 8 - camera.position.z) * 0.08;
-
-        camera.lookAt(
-            bike.position.x,
-            bike.position.y + 1,
-            bike.position.z - 20
-        );
-    } else {
-        camera.position.x += (rider.position.x - camera.position.x) * 0.08;
-        camera.position.y += (rider.position.y + 4 - camera.position.y) * 0.08;
-        camera.position.z += (rider.position.z + 8 - camera.position.z) * 0.08;
-
-        camera.lookAt(rider.position.x, rider.position.y + 1.5, rider.position.z - 10);
-    }
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-
-    controls();
-    updateWorld();
-    cameraFollow();
-
-    bike.position.y += (1 - bike.position.y) * 0.08;
-
-    renderer.render(scene, camera);
-}
-
-function onResize() {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
+});
 </script>
 
 </body>
 </html>
+<!--```
+
+## Features
+
+* Poki-style modern design
+* Responsive game grid
+* Search system
+* Play popup window
+* Neon gaming UI
+* Categories section
+* Hover animations
+* GitHub Pages ready
+* Mobile friendly
+* Single HTML file
+
+how To Add Your Own Games
+
+Replace this:
+
+```js
+openGame('https://example.com')
+```
+
+With your actual game URL or HTML file.
+-->
