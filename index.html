@@ -1,3 +1,8 @@
+# High Graphics Motorcycle Game (Single HTML File)
+
+Save this as `index.html` and open it in a browser or upload to GitHub Pages.
+
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -54,6 +59,7 @@ canvas {
 <body>
 
 <div id="ui">
+    <div id="message">Explore the city</div>
     Speed: <span id="speed">0</span> MPH<br>
     Distance: <span id="distance">0</span>
 </div>
@@ -69,13 +75,15 @@ canvas {
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.161/build/three.module.js';
 
 let scene, camera, renderer;
-let bike, road;
+let bike, rider, road;
 let speed = 0;
 let maxSpeed = 3;
 let distance = 0;
 let ramps = [];
 let worldObjects = [];
 let gameStarted = false;
+let onBike = true;
+let verticalVelocity = 0;
 
 const keys = {};
 
@@ -134,6 +142,7 @@ function init() {
 
     createRoadLines();
     createBike();
+    createRider();
     createCity();
     createSky();
     createRamps();
@@ -148,6 +157,20 @@ function init() {
 
     document.addEventListener('keyup', e => {
         keys[e.key.toLowerCase()] = false;
+    });
+
+    document.addEventListener('keydown', e => {
+        if (e.key.toLowerCase() === 'e') {
+            onBike = !onBike;
+
+            if (onBike) {
+                rider.visible = false;
+            } else {
+                rider.visible = true;
+                rider.position.copy(bike.position);
+                rider.position.x += 2;
+            }
+        }
     });
 }
 
@@ -221,14 +244,43 @@ function createBike() {
     scene.add(bike);
 }
 
+function createRider() {
+    rider = new THREE.Group();
+
+    const bodyMat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: 0x222222,
+        metalness: 0.5,
+        roughness: 0.5
+    });
+
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(0.7, 1.2, 0.4),
+        bodyMat
+    );
+    body.position.y = 1.2;
+    rider.add(body);
+
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.35, 16, 16),
+        bodyMat
+    );
+    head.position.y = 2.1;
+    rider.add(head);
+
+    rider.position.set(0, 0, 2);
+    rider.visible = false;
+    scene.add(rider);
+}
+
 function createCity() {
-    for (let i = 0; i < 300; i++) {
-        const height = Math.random() * 30 + 5;
+    for (let i = 0; i < 120; i++) {
+        const height = Math.random() * 30 + 8;
 
         const geo = new THREE.BoxGeometry(
-            Math.random() * 5 + 3,
+            Math.random() * 8 + 6,
             height,
-            Math.random() * 5 + 3
+            Math.random() * 8 + 6
         );
 
         const mat = new THREE.MeshStandardMaterial({
@@ -242,7 +294,7 @@ function createCity() {
                 Math.random() * 0.5,
                 Math.random()
             ),
-            emissiveIntensity: 0.5,
+            emissiveIntensity: 0.6,
             metalness: 0.7,
             roughness: 0.3
         });
@@ -250,17 +302,101 @@ function createCity() {
         const building = new THREE.Mesh(geo, mat);
 
         building.position.x = Math.random() > 0.5
-            ? Math.random() * 30 + 15
-            : -Math.random() * 30 - 15;
+            ? Math.random() * 40 + 15
+            : -Math.random() * 40 - 15;
 
         building.position.y = height / 2;
-        building.position.z = -Math.random() * 2000;
+        building.position.z = -Math.random() * 2500;
 
-        building.castShadow = true;
-        building.receiveShadow = true;
+        building.userData.enterable = Math.random() > 0.4;
 
         scene.add(building);
         worldObjects.push(building);
+
+        if (building.userData.enterable) {
+            createBuildingInterior(building);
+        }
+    }
+
+    createNPCs();
+}
+
+function createBuildingInterior(building) {
+    const floor = new THREE.Mesh(
+        new THREE.BoxGeometry(8, 0.2, 8),
+        new THREE.MeshStandardMaterial({
+            color: 0x222222,
+            emissive: 0x111111
+        })
+    );
+
+    floor.position.set(
+        building.position.x,
+        0.1,
+        building.position.z
+    );
+
+    scene.add(floor);
+    worldObjects.push(floor);
+
+    for (let i = 0; i < 3; i++) {
+        const table = new THREE.Mesh(
+            new THREE.BoxGeometry(1.5, 1, 1.5),
+            new THREE.MeshStandardMaterial({
+                color: 0x00ffff,
+                emissive: 0x003333
+            })
+        );
+
+        table.position.set(
+            building.position.x + (Math.random() - 0.5) * 5,
+            0.6,
+            building.position.z + (Math.random() - 0.5) * 5
+        );
+
+        scene.add(table);
+        worldObjects.push(table);
+    }
+}
+
+function createNPCs() {
+    for (let i = 0; i < 25; i++) {
+        const npc = new THREE.Group();
+
+        const body = new THREE.Mesh(
+            new THREE.BoxGeometry(0.7, 1.2, 0.4),
+            new THREE.MeshStandardMaterial({
+                color: Math.random() * 0xffffff,
+                emissive: 0x222222
+            })
+        );
+
+        body.position.y = 1;
+        npc.add(body);
+
+        const head = new THREE.Mesh(
+            new THREE.SphereGeometry(0.3, 12, 12),
+            new THREE.MeshStandardMaterial({ color: 0xffcc99 })
+        );
+
+        head.position.y = 1.9;
+        npc.add(head);
+
+        npc.position.set(
+            (Math.random() - 0.5) * 80,
+            0,
+            -Math.random() * 2000
+        );
+
+        npc.userData.talk = [
+            'Welcome to Neo City',
+            'Nice bike!',
+            'The night looks amazing',
+            'Watch the ramps ahead'
+        ][Math.floor(Math.random() * 4)];
+
+        scene.add(npc);
+        worldObjects.push(npc);
     }
 }
 
@@ -325,35 +461,57 @@ window.startGame = function() {
 function controls() {
     if (!gameStarted) return;
 
-    if (keys['w'] || keys['arrowup']) {
-        speed += 0.03;
-    }
+    if (onBike) {
+        if (keys['w'] || keys['arrowup']) speed += 0.03;
+        if (keys['s'] || keys['arrowdown']) speed -= 0.04;
 
-    if (keys['s'] || keys['arrowdown']) {
-        speed -= 0.04;
-    }
+        maxSpeed = keys['shift'] ? 5 : 3;
 
-    if (keys['shift']) {
-        maxSpeed = 5;
+        speed *= 0.98;
+        speed = Math.max(0, Math.min(speed, maxSpeed));
+
+        if (keys['a'] || keys['arrowleft']) {
+            bike.position.x -= 0.18 + speed * 0.05;
+            bike.rotation.z = 0.3;
+        } else if (keys['d'] || keys['arrowright']) {
+            bike.position.x += 0.18 + speed * 0.05;
+            bike.rotation.z = -0.3;
+        } else {
+            bike.rotation.z *= 0.85;
+        }
+
+        bike.position.x = Math.max(-8, Math.min(8, bike.position.x));
+
     } else {
-        maxSpeed = 3;
+        speed *= 0.92;
+
+        const walkSpeed = 0.18;
+
+        if (keys['w'] || keys['arrowup']) rider.position.z -= walkSpeed;
+        if (keys['s'] || keys['arrowdown']) rider.position.z += walkSpeed;
+        if (keys['a'] || keys['arrowleft']) rider.position.x -= walkSpeed;
+        if (keys['d'] || keys['arrowright']) rider.position.x += walkSpeed;
+
+        if (keys[' '] && rider.position.y <= 0.05) {
+            verticalVelocity = 0.25;
+        }
+
+        verticalVelocity -= 0.012;
+        rider.position.y += verticalVelocity;
+
+        if (rider.position.y < 0) {
+            rider.position.y = 0;
+            verticalVelocity = 0;
+        }
+
+        const dx = rider.position.x - bike.position.x;
+        const dz = rider.position.z - bike.position.z;
+
+        if (Math.sqrt(dx * dx + dz * dz) < 3 && keys['f']) {
+            onBike = true;
+            rider.visible = false;
+        }
     }
-
-    speed *= 0.98;
-
-    speed = Math.max(0, Math.min(speed, maxSpeed));
-
-    if (keys['a'] || keys['arrowleft']) {
-        bike.position.x -= 0.18 + speed * 0.05;
-        bike.rotation.z = 0.3;
-    } else if (keys['d'] || keys['arrowright']) {
-        bike.position.x += 0.18 + speed * 0.05;
-        bike.rotation.z = -0.3;
-    } else {
-        bike.rotation.z *= 0.85;
-    }
-
-    bike.position.x = Math.max(-8, Math.min(8, bike.position.x));
 }
 
 function updateWorld() {
@@ -361,11 +519,22 @@ function updateWorld() {
 
     distance += speed;
 
+    let nearbyMessage = 'Explore the city';
+
     worldObjects.forEach(obj => {
         obj.position.z += speed * 4;
 
         if (obj.position.z > 100) {
-            obj.position.z -= 2000;
+            obj.position.z -= 2500;
+        }
+
+        if (!onBike && obj.userData && obj.userData.talk) {
+            const dx = rider.position.x - obj.position.x;
+            const dz = rider.position.z - obj.position.z;
+
+            if (Math.sqrt(dx * dx + dz * dz) < 4) {
+                nearbyMessage = 'NPC: ' + obj.userData.talk;
+            }
         }
     });
 
@@ -386,17 +555,29 @@ function updateWorld() {
     });
 
     document.getElementById('speed').textContent = Math.floor(speed * 80);
+    document.getElementById('message').textContent = nearbyMessage;
+    document.getElementById('speed').textContent = Math.floor(speed * 80);
     document.getElementById('distance').textContent = Math.floor(distance);
 }
 
 function cameraFollow() {
-    camera.position.x += (bike.position.x - camera.position.x) * 0.08;
+    if (onBike) {
+        camera.position.x += (bike.position.x - camera.position.x) * 0.08;
+        camera.position.y += (4 - camera.position.y) * 0.08;
+        camera.position.z += (bike.position.z + 8 - camera.position.z) * 0.08;
 
-    camera.lookAt(
-        bike.position.x,
-        bike.position.y + 1,
-        bike.position.z - 20
-    );
+        camera.lookAt(
+            bike.position.x,
+            bike.position.y + 1,
+            bike.position.z - 20
+        );
+    } else {
+        camera.position.x += (rider.position.x - camera.position.x) * 0.08;
+        camera.position.y += (rider.position.y + 4 - camera.position.y) * 0.08;
+        camera.position.z += (rider.position.z + 8 - camera.position.z) * 0.08;
+
+        camera.lookAt(rider.position.x, rider.position.y + 1.5, rider.position.z - 10);
+    }
 }
 
 function animate() {
@@ -420,3 +601,5 @@ function onResize() {
 
 </body>
 </html>
+```
+
