@@ -60,6 +60,7 @@ canvas {
 
 <div id="ui">
     <div id="message">Explore the city</div>
+    <div id="mission">Mission: Drive through 3 ramps</div>
     Speed: <span id="speed">0</span> MPH<br>
     Distance: <span id="distance">0</span>
 </div>
@@ -84,6 +85,18 @@ let worldObjects = [];
 let gameStarted = false;
 let onBike = true;
 let verticalVelocity = 0;
+let missionIndex = 0;
+
+const missions = [
+    'Drive through 3 ramps',
+    'Talk to an NPC',
+    'Enter a building',
+    'Travel 2000 distance'
+];
+
+let rampHits = 0;
+let npcTalked = false;
+let enteredBuilding = false;
 
 const keys = {};
 
@@ -534,6 +547,11 @@ function updateWorld() {
 
             if (Math.sqrt(dx * dx + dz * dz) < 4) {
                 nearbyMessage = 'NPC: ' + obj.userData.talk;
+                npcTalked = true;
+
+                if (missionIndex === 1) {
+                    missionIndex = 2;
+                }
             }
         }
     });
@@ -551,11 +569,43 @@ function updateWorld() {
 
         if (Math.abs(dx) < 2.5 && Math.abs(dz) < 5) {
             bike.position.y = 3;
+            rampHits++;
+
+            if (missionIndex === 0 && rampHits >= 3) {
+                missionIndex = 1;
+            }
         }
     });
 
     document.getElementById('speed').textContent = Math.floor(speed * 80);
     document.getElementById('message').textContent = nearbyMessage;
+
+    if (!onBike) {
+        worldObjects.forEach(obj => {
+            if (obj.geometry && obj.geometry.type === 'BoxGeometry') {
+                const dx = rider.position.x - obj.position.x;
+                const dz = rider.position.z - obj.position.z;
+
+                if (Math.abs(dx) < 4 && Math.abs(dz) < 4 && obj.position.y < 1) {
+                    enteredBuilding = true;
+
+                    if (missionIndex === 2) {
+                        missionIndex = 3;
+                    }
+                }
+            }
+        });
+    }
+
+    if (missionIndex === 3 && distance >= 2000) {
+        missionIndex = 4;
+    }
+
+    const missionText = missionIndex >= missions.length
+        ? 'All Missions Complete!'
+        : 'Mission: ' + missions[missionIndex];
+
+    document.getElementById('mission').textContent = missionText;
     document.getElementById('speed').textContent = Math.floor(speed * 80);
     document.getElementById('distance').textContent = Math.floor(distance);
 }
@@ -601,5 +651,3 @@ function onResize() {
 
 </body>
 </html>
-```
-
